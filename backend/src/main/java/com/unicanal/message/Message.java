@@ -24,7 +24,10 @@ public class Message {
     private String conversationId;
     private Direction direction;
     private MessageType type;
-    /** Texto del mensaje o de la nota; para IMAGE, la URL o referencia del archivo. */
+    /**
+     * Texto del mensaje o de la nota. Los tipos que aún no se muestran (imagen, audio, video...) se guardan
+     * con un texto descriptivo, p. ej. "[Audio recibido]"; la descarga de archivos no está implementada.
+     */
     private String content;
     private String externalId;
     /** userId del agente; nulo si lo escribió el cliente. */

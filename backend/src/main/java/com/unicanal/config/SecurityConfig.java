@@ -35,6 +35,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
+                        // Webhooks de canales: sin JWT (Meta no lo envía); se autentican por firma.
+                        .requestMatchers("/api/webhooks/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling

@@ -12,7 +12,7 @@ Monorepo:
 | `frontend/` | React 19 + Vite + TypeScript |
 | `docker-compose.yml` | MongoDB local |
 
-> Estado: Fase 1 (MVP), **Paso 3 – modelo de datos**. Contexto y reglas de arquitectura en
+> Estado: Fase 1 (MVP), **Paso 4 – canales**. Contexto y reglas de arquitectura en
 > [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
 
 ## Requisitos
@@ -55,7 +55,7 @@ cd backend
 ./mvnw spring-boot:run          # Windows (cmd/PowerShell): mvnw.cmd spring-boot:run
 ```
 
-Para el perfil de desarrollo (simulador y datos de prueba, disponibles en pasos posteriores):
+Para el perfil de desarrollo (simulador de clientes; los datos de prueba llegan en pasos posteriores):
 `SPRING_PROFILES_ACTIVE=dev`.
 
 Comprobación: `curl http://localhost:8090/actuator/health` debe responder `{"status":"UP",...}`.
@@ -73,6 +73,39 @@ Comprobación: `curl http://localhost:8090/actuator/health` debe responder `{"st
 Las rutas protegidas piden `Authorization: Bearer <token>`. El `tenantId` y el `userId` salen
 siempre del token, nunca del body ni de la URL. Un agente desactivado pierde el acceso de
 inmediato, aunque su token no haya vencido.
+
+#### Canales (Paso 4)
+
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| POST | `/api/dev/simulate-inbound` | JWT, **solo perfil `dev`** | simula que un cliente escribe por cualquier canal |
+| GET | `/api/webhooks/whatsapp` | público | verificación de Meta: devuelve `hub.challenge` como texto plano |
+| POST | `/api/webhooks/whatsapp` | público, firmado | mensajes y estados de WhatsApp Cloud API |
+
+**Simulador (dev).** Crea el contacto y la conversación si no existen, en la empresa del JWT:
+
+```bash
+curl -X POST http://localhost:8090/api/dev/simulate-inbound \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"channel":"INSTAGRAM","contactExternalId":"ana_ig","contactName":"Ana","text":"Hola"}'
+```
+
+`channel` admite `WHATSAPP`, `INSTAGRAM`, `FACEBOOK` y `SIMULATED`. Un `messageId` fijo simula un
+reintento del canal (no se duplica).
+
+**WhatsApp.** Define en el entorno `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`,
+`WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` y `WHATSAPP_DEFAULT_TENANT_ID` (el id de la empresa
+dueña del número). Sin ellos el webhook rechaza todo (falla cerrado). En Meta, configura la URL
+`https://<tu-dominio>/api/webhooks/whatsapp` y el mismo verify token. Detalles de comportamiento:
+
+- La firma `X-Hub-Signature-256` se valida sobre los **bytes crudos** del cuerpo, antes de leer el JSON.
+- Responde 200 cuando todo se guardó y 5xx si algún evento falló, para que Meta reintente; el
+  procesamiento es idempotente por el id del mensaje.
+- Un POST puede traer varios `entry`, `changes`, `messages` y `statuses`: se procesan todos.
+- Audio, video, sticker, ubicación, reacciones, etc. se guardan como mensaje entrante con un texto
+  descriptivo (p. ej. `[Audio recibido]`). La descarga de archivos no está implementada.
+- Se ignoran (con aviso en el log) los eventos de un `phone_number_id` distinto al configurado.
+- Texto libre solo dentro de las 24 h posteriores al último mensaje del cliente.
 
 ### 4. Frontend (http://localhost:5173)
 
