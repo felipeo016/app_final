@@ -1,0 +1,20 @@
+# Secretos y entorno local
+.env
+.env.*
+!.env.example
+
+# Backend
+backend/target/
+backend/HELP.md
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# IDE / SO
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log

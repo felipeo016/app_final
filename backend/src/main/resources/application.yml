@@ -1,0 +1,33 @@
+spring:
+  application:
+    name: unicanal-backend
+  config:
+    # Carga opcional del .env de la raíz del repo (formato KEY=VALUE) para desarrollo local.
+    import:
+      - optional:file:../.env[.properties]
+      - optional:file:./.env[.properties]
+  # Boot 4: la conexión vive en spring.mongodb.*; spring.data.mongodb.* solo para Spring Data.
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27018/unicanal}
+  data:
+    mongodb:
+      auto-index-creation: true
+
+server:
+  port: ${SERVER_PORT:8090}
+
+app:
+  jwt:
+    # Sin valor por defecto: el secreto solo viene del entorno (mínimo 32 caracteres).
+    secret: ${JWT_SECRET:}
+    expiration-minutes: ${JWT_EXPIRATION_MINUTES:480}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true

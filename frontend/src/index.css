@@ -1,0 +1,24 @@
+:root {
+  --color-header: #1f3a4d;
+  --color-accent: #00807f;
+  --color-panel: #eaeef1;
+
+  --channel-whatsapp: #25d366;
+  --channel-instagram: #c13584;
+  --channel-facebook: #1877f2;
+
+  --status-new: #f5a623;
+  --status-in-progress: #1e88e5;
+  --status-resolved: #2e9e5b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  color: #1c2630;
+  background: var(--color-panel);
+}
