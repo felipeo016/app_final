@@ -12,7 +12,7 @@ Monorepo:
 | `frontend/` | React 19 + Vite + TypeScript |
 | `docker-compose.yml` | MongoDB local |
 
-> Estado: Fase 1 (MVP), **Paso 2 – autenticación y empresas**. Contexto y reglas de arquitectura en
+> Estado: Fase 1 (MVP), **Paso 3 – modelo de datos**. Contexto y reglas de arquitectura en
 > [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
 
 ## Requisitos

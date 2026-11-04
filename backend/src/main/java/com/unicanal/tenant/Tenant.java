@@ -1,14 +1,15 @@
 package com.unicanal.tenant;
 
 import java.time.Instant;
-import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.FieldType;
+import org.springframework.data.mongodb.core.mapping.MongoId;
 
 /** Empresa (tenant). Su id es el tenantId que llevan todos los demás documentos. */
 @Document("tenants")
 public class Tenant {
 
-    @Id
+    @MongoId(FieldType.STRING)
     private String id;
     private String name;
     private TenantSettings settings = new TenantSettings();

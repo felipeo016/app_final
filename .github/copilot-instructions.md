@@ -68,6 +68,18 @@ descripción más general de este documento.
    - La primera respuesta del agente en una conversación NEW la pasa a IN_PROGRESS.
    - Al desactivar un agente, sus conversaciones abiertas quedan con `assignedTo = null` y se
      publica el evento `ASSIGNED`.
+5. **IDs siempre String.** Todos los ids se guardan en MongoDB como String (el hex de 24
+   caracteres que genera el servidor), sin mezclar con ObjectId: tanto el `_id` de cada
+   documento como los campos de referencia (`tenantId`, `userId`, `contactId`,
+   `conversationId`, `assignedTo`, `sentBy`, etc.). Los documentos declaran su id con
+   `@MongoId(FieldType.STRING)` (un `@Id String` suelto lo guardaría como ObjectId). Esto
+   evita comparaciones y `$lookup` que fallan por tipos distintos. `IdTypesIntegrationTest`
+   recorre todas las colecciones y falla si encuentra un ObjectId.
+6. **WebSocket con la misma validación que `JwtAuthFilter`.** Al conectar (frame CONNECT del
+   Paso 6) no basta con que el JWT sea válido: se debe comprobar en base de datos que el
+   usuario siga **activo** y que pertenezca al **mismo tenant** del token, igual que hace
+   `JwtAuthFilter`. Si no, se rechaza la conexión. Conviene reutilizar esa lógica en vez de
+   duplicarla. Además, el SUBSCRIBE solo se permite al tópico del propio tenant.
 
 ### Supuestos aceptados
 - Paquete base `com.unicanal`; backend en el puerto 8090 y frontend en el 5173 con proxy a

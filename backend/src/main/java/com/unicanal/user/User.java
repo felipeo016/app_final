@@ -1,16 +1,17 @@
 package com.unicanal.user;
 
 import java.time.Instant;
-import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.FieldType;
+import org.springframework.data.mongodb.core.mapping.MongoId;
 
 @Document("users")
 @CompoundIndex(name = "tenant_role_active", def = "{'tenantId': 1, 'role': 1, 'active': 1}")
 public class User {
 
-    @Id
+    @MongoId(FieldType.STRING)
     private String id;
     private String tenantId;
     private String name;
