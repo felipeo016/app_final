@@ -5,6 +5,7 @@ import com.unicanal.channel.InboundMessage;
 import com.unicanal.channel.InvalidWebhookPayloadException;
 import com.unicanal.channel.StatusUpdate;
 import com.unicanal.channel.WebhookPayload;
+import com.unicanal.channel.WebhookService;
 import com.unicanal.message.DeliveryStatus;
 import com.unicanal.message.MessageType;
 import java.time.Instant;
@@ -30,6 +31,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class WhatsAppPayloadParser {
 
     private static final Logger log = LoggerFactory.getLogger(WhatsAppPayloadParser.class);
+    private static final String UNPROCESSABLE_TEXT = WebhookService.UNPROCESSABLE_TEXT;
 
     private final JsonMapper jsonMapper;
 
@@ -80,13 +82,21 @@ public class WhatsAppPayloadParser {
         for (JsonNode message : value.path("messages")) {
             String from = text(message, "from");
             if (from == null || from.isBlank()) {
-                log.warn("Mensaje de WhatsApp sin remitente: se omite (id {})", text(message, "id"));
+                // Sin remitente no hay a quién asociarlo: ni siquiera puede guardarse como no procesable.
+                log.error("Mensaje de WhatsApp sin remitente: se descarta (id {})", text(message, "id"));
                 continue;
             }
-            String type = text(message, "type");
-            messages.add(new InboundMessage(ChannelType.WHATSAPP, accountId, from, profileNames.get(from),
-                    text(message, "id"), isImage(type) ? MessageType.IMAGE : MessageType.TEXT,
-                    describe(type, message), timestamp(text(message, "timestamp"))));
+            try {
+                String type = text(message, "type");
+                messages.add(new InboundMessage(ChannelType.WHATSAPP, accountId, from, profileNames.get(from),
+                        text(message, "id"), isImage(type) ? MessageType.IMAGE : MessageType.TEXT,
+                        describe(type, message), timestamp(text(message, "timestamp"))));
+            } catch (RuntimeException e) {
+                // Un mensaje con datos inesperados no debe tumbar el resto del webhook ni perderse.
+                log.error("Mensaje de WhatsApp {} no interpretable: se guarda como no procesable", text(message, "id"), e);
+                messages.add(new InboundMessage(ChannelType.WHATSAPP, accountId, from, null, text(message, "id"),
+                        MessageType.TEXT, UNPROCESSABLE_TEXT, Instant.now()));
+            }
         }
 
         for (JsonNode status : value.path("statuses")) {

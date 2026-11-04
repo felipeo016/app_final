@@ -80,6 +80,25 @@ descripción más general de este documento.
    usuario siga **activo** y que pertenezca al **mismo tenant** del token, igual que hace
    `JwtAuthFilter`. Si no, se rechaza la conexión. Conviene reutilizar esa lógica en vez de
    duplicarla. Además, el SUBSCRIBE solo se permite al tópico del propio tenant.
+7. **Webhook síncrono; 500 solo ante errores pasajeros.** El POST del webhook procesa todos los
+   eventos antes de responder (no hay cola asíncrona que pueda perder mensajes). Responde 500 solo
+   si hubo un error pasajero (MongoDB caído, timeout, red), para que Meta reintente; el reintento es
+   seguro porque el procesamiento es idempotente por `{tenantId, externalId}`. Un error permanente
+   (datos que no se pueden interpretar) no se reintenta: el mensaje se guarda como INBOUND con el
+   texto `"[Mensaje no procesable]"` o, si ni eso es posible (p. ej. sin remitente, o cuerpo que no
+   es JSON), se registra con log ERROR y se sigue con los demás eventos. `TransientErrors` decide qué
+   es pasajero.
+8. **Los estados de entrega solo avanzan.** `PENDING → SENT → DELIVERED → READ`; `FAILED` solo antes
+   de la entrega. Un estado tardío o fuera de orden (p. ej. "delivered" después de "read") se ignora.
+   La actualización es una sola operación condicional en MongoDB, nunca leer-y-guardar.
+9. **Estados huérfanos se ignoran.** Un `status` cuyo mensaje no existe (id externo desconocido, de
+   otra cuenta, o que llegó antes de guardar el id externo) no crea nada ni falla: se registra en
+   debug y el webhook responde 200.
+10. **Respaldo al canal simulado solo en el perfil `dev`.** En `dev`, un canal sin adaptador
+    utilizable (Instagram/Facebook aún sin integrar, WhatsApp sin credenciales) usa el
+    `SimulatedChannelAdapter` para poder demostrar el flujo. En cualquier otro perfil, enviar por un
+    canal no disponible falla con `501 CHANNEL_NOT_AVAILABLE` y un mensaje claro, sin guardar el
+    mensaje y sin pasar nunca por el simulado.
 
 ### Supuestos aceptados
 - Paquete base `com.unicanal`; backend en el puerto 8090 y frontend en el 5173 con proxy a

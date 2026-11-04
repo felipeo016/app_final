@@ -172,12 +172,13 @@ class WhatsAppWebhookIntegrationTest {
     }
 
     @Test
-    void aBodyWithAValidSignatureButInvalidJsonIsABadRequest() throws Exception {
+    void aBodyWithAValidSignatureButInvalidJsonIsDiscardedWith200SoMetaDoesNotRetryForever() throws Exception {
         String body = "esto no es json";
+        long before = messages.count();
 
-        mockMvc.perform(rawPost(body, WebhookTestSupport.sign(body)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("INVALID_PAYLOAD"));
+        // Error permanente: reintentarlo nunca lo arreglaría, así que no se pide reintento (se registra con ERROR).
+        mockMvc.perform(rawPost(body, WebhookTestSupport.sign(body))).andExpect(status().isOk());
+        assertThat(messages.count()).isEqualTo(before);
     }
 
     // --- idempotencia ---

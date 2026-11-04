@@ -2,7 +2,10 @@ package com.unicanal.channel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -58,6 +61,28 @@ class ChannelRegistryTest {
                     assertThat(e.getCode()).isEqualTo("CHANNEL_NOT_AVAILABLE");
                 });
         assertThatThrownBy(() -> registry.adapterFor(ChannelType.INSTAGRAM)).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void anyProfileOtherThanDevNeverFallsBackToTheSimulatedAdapter() {
+        ChannelAdapter simulated = adapter(ChannelType.SIMULATED, true);
+        for (String[] profiles : new String[][] {{}, {"prod"}, {"test"}, {"staging", "default"}, {"development"}}) {
+            ChannelRegistry registry = new ChannelRegistry(
+                    List.of(adapter(ChannelType.WHATSAPP, false), simulated), environment(profiles));
+
+            assertThatThrownBy(() -> registry.adapterFor(ChannelType.INSTAGRAM))
+                    .as("perfiles %s, canal sin adaptador", List.of(profiles))
+                    .isInstanceOfSatisfying(ApiException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("CHANNEL_NOT_AVAILABLE");
+                        assertThat(e.getMessage()).isEqualTo(
+                                "No se puede enviar por INSTAGRAM: el canal todavía no tiene integración");
+                    });
+            assertThatThrownBy(() -> registry.adapterFor(ChannelType.WHATSAPP))
+                    .as("perfiles %s, canal sin credenciales", List.of(profiles))
+                    .isInstanceOfSatisfying(ApiException.class, e -> assertThat(e.getMessage()).isEqualTo(
+                            "No se puede enviar por WHATSAPP: el canal no está configurado"));
+        }
+        verify(simulated, never()).sendMessage(any());
     }
 
     @Test

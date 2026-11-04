@@ -56,8 +56,10 @@ public class WhatsAppWebhookController {
     }
 
     /**
-     * Recepción de mensajes y estados. Responde 200 cuando todo quedó guardado y 5xx si algún evento no
-     * pudo guardarse, para que Meta reintente (el reintento es seguro: el procesamiento es idempotente).
+     * Recepción de mensajes y estados. Responde 500 solo si hubo un error pasajero (Mongo caído, timeout),
+     * para que Meta reintente (el reintento es seguro: el procesamiento es idempotente). Los eventos con
+     * errores permanentes (datos ilegibles) no se reintentan: se guardan como "[Mensaje no procesable]" o se
+     * registran con log ERROR, y la respuesta es 200.
      */
     @PostMapping
     public ResponseEntity<Void> receive(@RequestBody byte[] rawBody,
@@ -67,9 +69,9 @@ public class WhatsAppWebhookController {
             throw new ApiException(HttpStatus.FORBIDDEN, "INVALID_SIGNATURE", "Firma inválida");
         }
         WebhookOutcome outcome = webhookService.handle(adapter, rawBody);
-        log.info("Webhook de WhatsApp: {} guardados, {} repetidos, {} estados, {} ignorados, {} fallidos",
-                outcome.stored(), outcome.duplicates(), outcome.statusesApplied(), outcome.ignored(),
-                outcome.failed());
+        log.info("Webhook de WhatsApp: {} guardados, {} repetidos, {} estados, {} ignorados, {} no procesables, "
+                + "{} fallidos", outcome.stored(), outcome.duplicates(), outcome.statusesApplied(), outcome.ignored(),
+                outcome.unprocessable(), outcome.failed());
         if (outcome.failed() > 0) {
             throw new ApiException(HttpStatus.INTERNAL_SERVER_ERROR, "WEBHOOK_PROCESSING_FAILED",
                     "No se pudieron procesar todos los eventos");

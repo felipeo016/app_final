@@ -40,7 +40,9 @@ public class ChannelRegistry {
             log.debug("Canal {} no disponible: se usa el adaptador simulado (perfil dev)", channel);
             return simulated;
         }
+        String reason = adapter == null ? "todavía no tiene integración" : "no está configurado";
+        log.warn("Canal {} no disponible ({}): no se usa el simulado fuera del perfil dev", channel, reason);
         throw new ApiException(HttpStatus.NOT_IMPLEMENTED, "CHANNEL_NOT_AVAILABLE",
-                "El canal " + channel + " no está disponible");
+                "No se puede enviar por " + channel + ": el canal " + reason);
     }
 }

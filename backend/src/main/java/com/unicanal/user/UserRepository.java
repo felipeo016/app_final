@@ -13,4 +13,7 @@ public interface UserRepository extends MongoRepository<User, String> {
     Optional<User> findByIdAndTenantId(String id, String tenantId);
 
     List<User> findByTenantIdAndRoleOrderByCreatedAtAsc(String tenantId, Role role);
+
+    /** Agentes activos en orden de alta: base estable para la asignación por turnos. */
+    List<User> findByTenantIdAndRoleAndActiveTrueOrderByCreatedAtAsc(String tenantId, Role role);
 }

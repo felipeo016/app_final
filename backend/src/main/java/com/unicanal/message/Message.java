@@ -34,6 +34,8 @@ public class Message {
     private String sentBy;
     private Instant timestamp;
     private DeliveryStatus deliveryStatus;
+    /** Motivo legible del fallo cuando deliveryStatus es FAILED; se muestra al agente. */
+    private String failureReason;
 
     protected Message() {
     }
@@ -97,5 +99,9 @@ public class Message {
 
     public void setDeliveryStatus(DeliveryStatus deliveryStatus) {
         this.deliveryStatus = deliveryStatus;
+    }
+
+    public String getFailureReason() {
+        return failureReason;
     }
 }
