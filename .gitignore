@@ -11,7 +11,8 @@ backend/HELP.md
 frontend/node_modules/
 frontend/dist/
 
-# IDE / SO
+# IDE / SO / herramientas locales
+.claude/
 .idea/
 .vscode/
 *.iml

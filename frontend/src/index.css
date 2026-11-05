@@ -1,24 +1,469 @@
 :root {
   --color-header: #1f3a4d;
   --color-accent: #00807f;
+  --color-accent-dark: #006463;
   --color-panel: #eaeef1;
+  --color-surface: #ffffff;
+  --color-border: #d5dce2;
+  --color-text: #1c2630;
+  --color-muted: #5f6f7c;
+  --color-risk: #d32f2f;
+  --color-risk-bg: #fdecec;
 
   --channel-whatsapp: #25d366;
   --channel-instagram: #c13584;
   --channel-facebook: #1877f2;
+  --channel-simulated: #7a8792;
 
   --status-new: #f5a623;
   --status-in-progress: #1e88e5;
   --status-resolved: #2e9e5b;
+
+  --radius: 8px;
+
+  /* El diseño es claro: sin esto, en modo oscuro del sistema los controles nativos salen negros */
+  color-scheme: light;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
+body,
+#root {
+  height: 100%;
+}
+
 body {
   margin: 0;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  color: #1c2630;
+  color: var(--color-text);
   background: var(--color-panel);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+/* --- botones y avisos --- */
+
+.btn-primary {
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  padding: 0.65rem 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-accent-dark);
+}
+
+.btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+
+.alert {
+  margin: 0;
+  padding: 0.6rem 0.8rem;
+  border-radius: var(--radius);
+  font-size: 0.9rem;
+}
+
+.alert-warning {
+  background: #fff4e0;
+  color: #7a4b00;
+  border: 1px solid #f5c76b;
+}
+
+.alert-error {
+  background: var(--color-risk-bg);
+  color: #8e1b1b;
+  border: 1px solid #f2b0b0;
+}
+
+/* --- login y registro --- */
+
+.auth-page {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem 1rem;
+  background: linear-gradient(160deg, var(--color-header) 0 40%, var(--color-panel) 40%);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--color-surface);
+  border-radius: 12px;
+  padding: 2rem 1.75rem;
+  box-shadow: 0 10px 30px rgb(0 0 0 / 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.auth-card h2 {
+  margin: 0.25rem 0 0;
+  font-size: 1.15rem;
+}
+
+.auth-brand {
+  margin: 0;
+  color: var(--color-header);
+  font-size: 1.6rem;
+}
+
+.auth-tagline {
+  margin: -0.6rem 0 0;
+  color: var(--color-accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.auth-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.auth-card input {
+  background: #fff;
+  color: var(--color-text);
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.auth-card input:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.auth-card input[aria-invalid='true'] {
+  border-color: var(--color-risk);
+}
+
+.field-error {
+  color: var(--color-risk);
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.auth-switch {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.auth-switch a {
+  color: var(--color-accent);
+}
+
+/* --- estructura principal --- */
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  background: var(--color-header);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.7rem 1.25rem;
+  flex-wrap: wrap;
+}
+
+.app-brand {
+  font-weight: 700;
+  font-size: 1.15rem;
+}
+
+.app-tenant {
+  font-weight: 400;
+  opacity: 0.8;
+  font-size: 0.9rem;
+  margin-left: 0.5rem;
+}
+
+.app-user {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.9rem;
+}
+
+.connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+}
+
+.connection::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f5a623;
+}
+
+.connection-connected::before {
+  background: var(--channel-whatsapp);
+}
+
+.columns {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr) minmax(240px, 320px);
+  gap: 1px;
+  background: var(--color-border);
+}
+
+.column {
+  background: var(--color-panel);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.column-inbox {
+  background: var(--color-surface);
+}
+
+.placeholder {
+  margin: auto;
+  padding: 2rem;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.placeholder h2 {
+  color: var(--color-text);
+  margin-top: 0;
+}
+
+@media (max-width: 900px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+
+  .column-conversation,
+  .column-profile {
+    display: none;
+  }
+}
+
+/* --- filtros --- */
+
+.filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.filters select {
+  padding: 0.4rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--color-text);
+  min-width: 0;
+}
+
+.filter-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+}
+
+/* --- lista de conversaciones --- */
+
+.conversation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.conversation-list[aria-busy='true'] {
+  opacity: 0.75;
+}
+
+.list-message {
+  padding: 1.5rem;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.conversation-item {
+  width: 100%;
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--color-panel);
+  border-left: 4px solid transparent;
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.conversation-item:hover {
+  background: #f5f8fa;
+}
+
+.conversation-item.selected {
+  background: #e3f2f1;
+  border-left-color: var(--color-accent);
+}
+
+.conversation-item.at-risk {
+  background: var(--color-risk-bg);
+  border-left-color: var(--color-risk);
+}
+
+.avatar {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.item-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.item-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-time {
+  flex: none;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.item-preview {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.item-assignee {
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  color: #fff;
+}
+
+.tag-channel-whatsapp {
+  background: var(--channel-whatsapp);
+}
+
+.tag-channel-instagram {
+  background: var(--channel-instagram);
+}
+
+.tag-channel-facebook {
+  background: var(--channel-facebook);
+}
+
+.tag-channel-simulated {
+  background: var(--channel-simulated);
+}
+
+.tag-status-new {
+  background: var(--status-new);
+}
+
+.tag-status-in-progress {
+  background: var(--status-in-progress);
+}
+
+.tag-status-resolved {
+  background: var(--status-resolved);
+}
+
+.unread {
+  margin-left: auto;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.risk-text {
+  color: var(--color-risk);
+  font-size: 0.8rem;
+  font-weight: 600;
 }

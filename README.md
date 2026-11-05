@@ -12,7 +12,7 @@ Monorepo:
 | `frontend/` | React 19 + Vite + TypeScript |
 | `docker-compose.yml` | MongoDB local |
 
-> Estado: Fase 1 (MVP), **Paso 4 – canales**. Contexto y reglas de arquitectura en
+> Estado: Fase 1 (MVP), **Paso 8a – frontend: acceso y bandeja**. Contexto y reglas de arquitectura en
 > [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
 
 ## Requisitos
@@ -116,6 +116,43 @@ npm run dev
 ```
 
 Vite redirige `/api` y `/ws` al backend (`VITE_BACKEND_URL`, por defecto `http://localhost:8090`).
+Abre http://localhost:5173, registra una empresa en **Regístrala** y entrarás a la bandeja.
+
+La sesión (JWT) se guarda en `sessionStorage`: dura lo que la pestaña. Si el token vence, el
+backend responde 401 o cierra el WebSocket por sesión vencida, y la app vuelve al login con un aviso.
+
+#### Ver la bandeja en tiempo real (perfil `dev`)
+
+Con el backend arrancado con `SPRING_PROFILES_ACTIVE=dev`, inicia sesión con el correo y la
+contraseña con que registraste la empresa y simula que un cliente escribe. La conversación aparece
+al instante en la bandeja. Para ver la alerta "cero mensajes perdidos" sin esperar 15 minutos, el
+último comando baja el umbral a 1 minuto (la tarea revisa cada 60 s).
+
+**PowerShell (Windows):**
+
+```powershell
+$B = "http://localhost:8090"
+$r = Invoke-RestMethod -Method Post "$B/api/auth/login" -ContentType "application/json" -Body '{"email":"TU_CORREO","password":"TU_CLAVE"}'
+$h = @{ Authorization = "Bearer $($r.token)" }
+# charset=utf-8: sin él, Windows PowerShell 5.1 envía el cuerpo en Latin-1 y, si lleva tildes o ñ, el backend responde 400
+Invoke-RestMethod -Method Post "$B/api/dev/simulate-inbound" -Headers $h -ContentType "application/json; charset=utf-8" -Body '{"channel":"WHATSAPP","contactExternalId":"573001112233","contactName":"Ana Ríos","text":"Hola, ¿tienen tallas M?"}'
+Invoke-RestMethod -Method Put "$B/api/tenant/settings" -Headers $h -ContentType "application/json" -Body '{"riskAlertMinutes":1}'
+```
+
+**bash (Linux, macOS, Git Bash):**
+
+```bash
+B=http://localhost:8090
+TOKEN=$(curl -s -X POST $B/api/auth/login -H "Content-Type: application/json" \
+  -d '{"email":"TU_CORREO","password":"TU_CLAVE"}' | sed -E 's/.*"token":"([^"]+)".*/\1/')
+curl -X POST $B/api/dev/simulate-inbound -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"channel":"WHATSAPP","contactExternalId":"573001112233","contactName":"Ana Ríos","text":"Hola, ¿tienen tallas M?"}'
+curl -X PUT $B/api/tenant/settings -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"riskAlertMinutes":1}'
+```
+
+`channel` puede ser `WHATSAPP`, `INSTAGRAM`, `FACEBOOK` o `SIMULATED`. Repetir el mismo
+`contactExternalId` añade mensajes a la misma conversación; uno nuevo crea otro chat.
 
 ## Pruebas y compilación
 
@@ -124,7 +161,7 @@ Vite redirige `/api` y `/ws` al backend (`VITE_BACKEND_URL`, por defecto `http:/
 cd backend && ./mvnw verify
 
 # Frontend
-cd frontend && npm run lint && npm run build
+cd frontend && npm run lint && npm run build && npm test
 ```
 
 ## Variables de entorno
