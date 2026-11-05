@@ -1,5 +1,6 @@
 package com.unicanal.realtime;
 
+import com.unicanal.ai.AiTypingEvent;
 import com.unicanal.conversation.ConversationAssignedEvent;
 import com.unicanal.conversation.ConversationRepository;
 import com.unicanal.conversation.ConversationUpdatedEvent;
@@ -78,6 +79,13 @@ public class RealtimePublisher {
     @Order(Ordered.LOWEST_PRECEDENCE)
     public void onConversationUpdated(ConversationUpdatedEvent event) {
         publish(Type.CONVERSATION_UPDATED, event.tenantId(), event.conversationId(), null);
+    }
+
+    @EventListener
+    @Order(Ordered.LOWEST_PRECEDENCE)
+    public void onAiTyping(AiTypingEvent event) {
+        publish(event.typing() ? Type.AI_TYPING : Type.AI_TYPING_STOPPED, event.tenantId(), event.conversationId(),
+                null);
     }
 
     @EventListener

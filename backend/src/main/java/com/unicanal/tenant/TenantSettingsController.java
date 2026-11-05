@@ -1,11 +1,13 @@
 package com.unicanal.tenant;
 
+import com.unicanal.ai.AiMode;
 import com.unicanal.common.ApiException;
 import com.unicanal.common.AuthPrincipal;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
@@ -36,7 +38,8 @@ public class TenantSettingsController {
     public SettingsResponse get(@AuthenticationPrincipal AuthPrincipal principal) {
         Tenant tenant = tenants.findById(principal.tenantId())
                 .orElseThrow(() -> ApiException.notFound("TENANT_NOT_FOUND", "Empresa no encontrada"));
-        return new SettingsResponse(tenant.getSettings().getRiskAlertMinutes());
+        TenantSettings settings = tenant.getSettings();
+        return new SettingsResponse(settings.getRiskAlertMinutes(), settings.getAiMode(), settings.getBusinessInfo());
     }
 
     /** La alerta de riesgo lee la configuración en cada pasada: el cambio aplica en la siguiente. */
@@ -48,12 +51,28 @@ public class TenantSettingsController {
         return get(principal);
     }
 
-    public record SettingsResponse(int riskAlertMinutes) {
+    /** Ajustes de IA: la IA los lee en cada mensaje, así que aplican de inmediato. */
+    @PutMapping("/ai")
+    public SettingsResponse updateAi(@AuthenticationPrincipal AuthPrincipal principal,
+            @Valid @RequestBody UpdateAiSettingsRequest request) {
+        String info = request.businessInfo() == null ? "" : request.businessInfo().strip();
+        mongoTemplate.updateFirst(Query.query(Criteria.where("_id").is(principal.tenantId())),
+                Update.update("settings.aiMode", request.aiMode()).set("settings.businessInfo", info), Tenant.class);
+        return get(principal);
+    }
+
+    public record SettingsResponse(int riskAlertMinutes, AiMode aiMode, String businessInfo) {
     }
 
     public record UpdateSettingsRequest(
             @NotNull(message = "Indica los minutos de la alerta")
             @Min(value = 1, message = "Debe estar entre 1 y 1440 minutos")
             @Max(value = 1440, message = "Debe estar entre 1 y 1440 minutos") Integer riskAlertMinutes) {
+    }
+
+    public record UpdateAiSettingsRequest(
+            @NotNull(message = "Elige el modo de la IA") AiMode aiMode,
+            @Size(max = TenantSettings.BUSINESS_INFO_MAX_LENGTH,
+                    message = "La información del negocio admite hasta 4000 caracteres") String businessInfo) {
     }
 }

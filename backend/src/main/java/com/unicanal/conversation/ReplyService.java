@@ -93,6 +93,30 @@ public class ReplyService {
     }
 
     /**
+     * Respuesta automática de la IA: mismo camino que la de un agente (validaciones, PENDING antes de llamar al
+     * canal, SENT o FAILED), pero sin autor y marcada como automática. Al enviarse NO fija {@code firstResponseAt}
+     * ni pasa el chat a "En proceso" (eso lo hace la primera respuesta humana); solo actualiza
+     * {@code lastOutboundAt}, así que el chat deja de estar "sin responder" y se le quita la alerta de riesgo.
+     *
+     * @throws ApiException si no se puede responder (chat resuelto, canal no disponible, ventana cerrada)
+     */
+    public MessageResponse sendAutomatic(String tenantId, String conversationId, String text) {
+        Conversation conversation = conversationService.find(tenantId, conversationId);
+        SendTarget target = validateSendable(tenantId, conversation);
+
+        String body = text.strip();
+        Message draft = new Message(tenantId, conversationId, Direction.OUTBOUND, MessageType.TEXT, body, null, null,
+                target.now(), DeliveryStatus.PENDING);
+        draft.markAutomatic();
+        Message pending = messages.save(draft);
+        touchConversation(tenantId, conversationId, target.now(), body);
+
+        Message result = deliver(conversation, target, pending);
+        events.publishEvent(new MessageSentEvent(tenantId, conversationId, result.getId(), result.getDeliveryStatus()));
+        return MessageResponse.from(result);
+    }
+
+    /**
      * Reintenta un mensaje que quedó FAILED: el MISMO mensaje vuelve a PENDING (no se duplica en el chat) y se
      * envía otra vez, con las mismas validaciones que una respuesta nueva. Si dos agentes pulsan "Reintentar"
      * a la vez, solo uno lo consigue (el paso FAILED → PENDING es condicional); el otro recibe 409.
@@ -156,7 +180,11 @@ public class ReplyService {
             SendResult sent = target.adapter().sendMessage(new OutboundMessage(tenantId, conversationId,
                     target.recipient(), pending.getContent(), conversation.getLastInboundAt()));
             Message result = markSent(pending, sent);
-            recordResponse(tenantId, conversationId, target.now());
+            if (pending.isAutomatic()) {
+                recordAutomaticResponse(tenantId, conversationId, target.now());
+            } else {
+                recordResponse(tenantId, conversationId, target.now());
+            }
             return result;
         } catch (RuntimeException e) {
             Failure failure = Failure.of(e);
@@ -239,6 +267,14 @@ public class ReplyService {
                 new Update().max("lastOutboundAt", timestamp), Conversation.class);
         // Después de fijar lastOutboundAt: si la alerta la marcó justo antes, aquí se limpia; si corre
         // después, ya no la ve pendiente de respuesta.
+        mongoTemplate.updateFirst(ConversationService.byId(tenantId, conversationId),
+                RiskAlertService.clearRisk(), Conversation.class);
+    }
+
+    /** Respuesta automática enviada: el chat ya no espera respuesta, pero no cuenta como primera respuesta humana. */
+    private void recordAutomaticResponse(String tenantId, String conversationId, Instant timestamp) {
+        mongoTemplate.updateFirst(ConversationService.byId(tenantId, conversationId),
+                new Update().max("lastOutboundAt", timestamp), Conversation.class);
         mongoTemplate.updateFirst(ConversationService.byId(tenantId, conversationId),
                 RiskAlertService.clearRisk(), Conversation.class);
     }

@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom'
+import { AI_STATE_LABELS, useAiStatus } from '../ai/aiStatus'
 import type { Session } from '../auth/session'
 import type { ConnectionState } from '../realtime/realtimeClient'
 import { useSimulatorAvailable } from './useSimulatorAvailable'
@@ -18,6 +19,7 @@ interface Props {
 export default function AppHeader({ session, onLogout, connection }: Props) {
   const simulator = useSimulatorAvailable()
   const owner = session.user.role === 'OWNER'
+  const ai = useAiStatus()
   return (
     <header className="app-header">
       <div className="app-brand">
@@ -33,7 +35,21 @@ export default function AppHeader({ session, onLogout, connection }: Props) {
         {simulator && <NavLink to="/simulador">Simulador</NavLink>}
       </nav>
       <div className="app-user">
-        {connection && <span className={`connection connection-${connection}`}>{CONNECTION_LABELS[connection]}</span>}
+        {ai && (
+          <span
+            className={`ai-indicator ai-${ai.state.toLowerCase()}`}
+            title={
+              ai.state === 'UNAVAILABLE'
+                ? 'Ollama no responde. La bandeja funciona igual; las respuestas las da el equipo.'
+                : ai.state === 'READY'
+                  ? `Modelo ${ai.model} · ${ai.mode === 'AUTO' ? 'Respuesta automática' : 'Sugerencias'}`
+                  : 'El dueño puede activarla en Ajustes'
+            }
+          >
+            {AI_STATE_LABELS[ai.state]}
+          </span>
+        )}
+        {connection &&<span className={`connection connection-${connection}`}>{CONNECTION_LABELS[connection]}</span>}
         <span className="app-user-name">
           {session.user.name} · {owner ? 'Dueño' : 'Agente'}
         </span>

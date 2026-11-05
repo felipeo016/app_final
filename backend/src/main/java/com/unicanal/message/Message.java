@@ -46,6 +46,8 @@ public class Message {
      * dura demasiado es un envío huérfano (el proceso se cayó a mitad): lo cierra {@code PendingSendSweeper}.
      */
     private Instant pendingSince;
+    /** Respuesta escrita y enviada por la IA (sin {@code sentBy}): se muestra con la etiqueta "Respuesta automática". */
+    private boolean automatic;
 
     protected Message() {
     }
@@ -118,5 +120,13 @@ public class Message {
 
     public String getFailureCode() {
         return failureCode;
+    }
+
+    public boolean isAutomatic() {
+        return automatic;
+    }
+
+    public void markAutomatic() {
+        this.automatic = true;
     }
 }

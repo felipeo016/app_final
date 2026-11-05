@@ -94,7 +94,8 @@ class DemoRestoreIntegrationTest {
         assertThat(mongoTemplate.count(Query.query(Criteria.where("tenantId").is(tenantId).and("open").is(true)),
                 Conversation.class)).isEqualTo(5);
         assertThat(mongoTemplate.find(Query.query(Criteria.where("tenantId").is(tenantId)), QuickReply.class))
-                .extracting(QuickReply::getTitle).containsExactlyInAnyOrder("Horarios", "Envíos", "Medios de pago");
+                .extracting(QuickReply::getTitle).containsExactlyInAnyOrderElementsOf(
+                        DemoData.QUICK_REPLIES.stream().map(DemoData.DemoQuickReply::title).toList());
         assertThat(mongoTemplate.findById(tenantId, Tenant.class).getSettings().getRiskAlertMinutes()).isEqualTo(15);
         // Solo quedan las tres cuentas demo, activas y con la contraseña documentada
         assertThat(mongoTemplate.find(Query.query(Criteria.where("tenantId").is(tenantId)), User.class))

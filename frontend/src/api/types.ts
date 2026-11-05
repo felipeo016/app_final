@@ -70,6 +70,8 @@ export interface Message {
   failureReason: string | null
   /** CHANNEL_SEND_UNCONFIRMED: el canal no respondió; puede que el cliente sí lo haya recibido. */
   failureCode?: string | null
+  /** Respuesta escrita y enviada por la IA (etiqueta "Respuesta automática"). */
+  automatic?: boolean
 }
 
 export const UNCONFIRMED_SEND = 'CHANNEL_SEND_UNCONFIRMED'
@@ -90,7 +92,13 @@ export interface AssignableUser {
   role: Role
 }
 
-export type RealtimeEventType = 'MESSAGE_CREATED' | 'CONVERSATION_UPDATED' | 'ASSIGNED'
+/** AI_TYPING: "La IA está escribiendo…" en ese chat; AI_TYPING_STOPPED: desistió sin responder. */
+export type RealtimeEventType =
+  | 'MESSAGE_CREATED'
+  | 'CONVERSATION_UPDATED'
+  | 'ASSIGNED'
+  | 'AI_TYPING'
+  | 'AI_TYPING_STOPPED'
 
 export interface RealtimeEvent {
   type: RealtimeEventType
@@ -109,4 +117,13 @@ export function toMillis(value: ApiInstant | null | undefined): number | null {
   }
   const millis = Date.parse(value)
   return Number.isNaN(millis) ? null : millis
+}
+
+export type AiMode = 'OFF' | 'SUGGEST' | 'AUTO'
+
+/** READY: "IA lista"; OFF: la empresa la apagó; UNAVAILABLE: Ollama no responde. */
+export interface AiStatus {
+  state: 'READY' | 'OFF' | 'UNAVAILABLE'
+  mode: AiMode
+  model: string
 }

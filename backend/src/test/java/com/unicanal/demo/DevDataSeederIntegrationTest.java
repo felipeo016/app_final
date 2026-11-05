@@ -143,7 +143,8 @@ class DevDataSeederIntegrationTest {
         assertThat(WindowPolicy.isOpen(luisa.getLastInboundAt(), Instant.now())).isFalse();
         // Respuestas rápidas
         assertThat(quickReplies.findByTenantIdOrderByTitleAsc(tenantId)).extracting(QuickReply::getTitle)
-                .containsExactly("Envíos", "Horarios", "Medios de pago");
+                .containsExactlyInAnyOrderElementsOf(DemoData.QUICK_REPLIES.stream().map(DemoData.DemoQuickReply::title).toList())
+                .contains("Envíos", "Horarios", "Medios de pago", "Contra entrega", "Zapatos y accesorios", "Descuentos");
     }
 
     @Test

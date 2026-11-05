@@ -29,7 +29,8 @@ fuente de verdad; aquí se explica el conjunto.
 | Paquete | Responsabilidad |
 |---|---|
 | `auth` | Registro e inicio de sesión, JWT HS256 (`JwtService`), `PrincipalResolver`: la validación de identidad que comparten HTTP (`JwtAuthFilter`) y WebSocket. Comprueba en base de datos que el usuario siga activo y sea del tenant del token. |
-| `tenant` | Empresa y su configuración (`riskAlertMinutes`). |
+| `tenant` | Empresa y su configuración (`riskAlertMinutes`, modo de IA e información del negocio). |
+| `ai` | IA local: `AiProvider` (como `ChannelAdapter`) con `OllamaProvider` (`/api/chat`, `keep_alive`, precarga al arrancar), instrucciones y validación del JSON (`AiPrompts`, `AiAnswer`), chequeos fijos (`HumanTopics`, `CatalogGuard`), sugerencias, selección de respuesta rápida y estado (`AiAssistant`) y respuesta automática en hilos propios (`AutoReplyService`). |
 | `user` | Usuarios (OWNER, AGENT), alta y desactivación de agentes, usuarios asignables. |
 | `contact` | Clientes con una identidad por canal (`identityKeys` "CANAL:externalId", índice único por tenant). |
 | `conversation` | Bandeja, estados, asignación (`AssignmentService`, también por turnos), respuestas (`ReplyService`), respuestas rápidas, ventas y alerta de riesgo (`RiskAlertService`). |
@@ -48,7 +49,8 @@ fuente de verdad; aquí se explica el conjunto.
 | `conversation` | Chat abierto (`useConversation`), mensajes, caja de respuesta y respuestas rápidas. |
 | `profile` | Perfil del cliente, estado, asignación y venta. |
 | `realtime` | Cliente STOMP: reconexión y fin de sesión según el código de cierre. |
-| `admin`, `simulator`, `layout` | Agentes y Ajustes (OWNER), Simulador (dev) y encabezado. |
+| `admin`, `simulator`, `layout` | Agentes y Ajustes (OWNER, también los de IA), Simulador (dev) y encabezado (con el estado de la IA). |
+| `ai` | Estado de la IA compartido (una consulta cada 15 s para toda la app). |
 
 ## Flujo de un mensaje entrante
 
@@ -146,9 +148,25 @@ fuente de verdad; aquí se explica el conjunto.
   datos demo. Una prueba verifica que fuera de `dev` no existe ninguna ruta `/api/dev`.
 - **Reloj inyectable** (`Clock`) y tareas programadas desactivables, para probar con tiempo
   controlado sin esperas reales.
+- **IA fuera del camino crítico**: la recepción de un mensaje solo encola la tarea de la IA (2 hilos,
+  cola acotada); si Ollama está caído o tarda, el mensaje ya está en la bandeja. La IA responde sola solo
+  si ningún humano ha escrito en el chat, vuelve a comprobarlo justo antes de enviar, y sus mensajes no
+  fijan `firstResponseAt` (la métrica de primera respuesta sigue siendo humana).
+- **Respuesta automática por selección, no por redacción**: el modelo solo elige una respuesta rápida
+  (lista cerrada de códigos con `enum` en el `format` de Ollama, o `null`) y se envía su texto exacto con
+  un saludo fijo. Un modelo de 3b redactando inventaba datos en ~15 % de las preguntas; eligiendo, no
+  puede (comprobado con `AiEvaluation`). Sugerencias sí redacta, porque un agente revisa antes de enviar.
+- **El texto del cliente es un dato**: va en el mensaje de usuario dentro de un bloque delimitado, una
+  línea por mensaje y sin las etiquetas del bloque; las reglas y la información del negocio van en el
+  mensaje de sistema. El modelo debe responder un JSON con esquema (`format` de Ollama); cualquier otra
+  salida se descarta.
 
 ## Limitaciones conocidas
 
+- **IA: un modelo pequeño puede equivocarse.** Con 8 GB de RAM se usa `qwen2.5:3b`. En Sugerencias
+  puede proponer datos inventados (los chequeos fijos solo atrapan tallas, colores y temas para una
+  persona), por eso el agente revisa antes de enviar. En el automático no inventa, pero a veces elige una
+  respuesta rápida que no viene al caso o deja para el equipo algo que sí tenía respuesta.
 - **Una sola instancia del backend.** El broker STOMP es el simple en memoria de Spring y el registro
   de sesiones WebSocket también vive en memoria. Con dos o más instancias, los eventos y los cierres
   de sesión no llegarían a los usuarios conectados a otra. Para escalar hace falta un broker externo

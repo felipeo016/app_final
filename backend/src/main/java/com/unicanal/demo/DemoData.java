@@ -1,5 +1,6 @@
 package com.unicanal.demo;
 
+import com.unicanal.ai.AiMode;
 import com.unicanal.auth.AuthService;
 import com.unicanal.auth.dto.AuthResponse;
 import com.unicanal.auth.dto.RegisterRequest;
@@ -62,6 +63,88 @@ public class DemoData {
     /** Contraseña de las tres cuentas demo (documentada en el README; solo desarrollo local). */
     public static final String DEMO_PASSWORD = "Demo-Unicanal-2026";
 
+    /**
+     * "Información del negocio" de la Tienda Demo, con los mismos datos que las respuestas rápidas y coherente con el
+     * guion de la demo en vivo. Las tallas van una por una ("28, 30, 32…", no "28 a 40"): un modelo pequeño lee mal
+     * los rangos. Quedan a propósito para el equipo el estado de un pedido, los datos para transferir y las
+     * cotizaciones de dotación.
+     */
+    public static final String BUSINESS_INFO = """
+            Tienda Demo vende solo ropa casual para hombre y mujer. No vendemos zapatos ni accesorios.
+            Tienda física en Medellín (barrio Laureles, carrera 76 # 34-20). También vendemos por WhatsApp, \
+            Instagram y Facebook.
+
+            Horario: lunes a sábado de 8:00 a. m. a 7:00 p. m. Domingos y festivos no abrimos ni hacemos envíos.
+
+            Envíos a toda Colombia:
+            - Medellín y su área metropolitana: $8.000. Llega el mismo día si pides antes de las 2:00 p. m.
+            - Resto del país: $15.000. Llega en 2 a 4 días hábiles.
+            - Pago contra entrega (en efectivo al recibir): solo en Pereira. En las demás ciudades no hay contra \
+            entrega.
+
+            Medios de pago: Nequi, Daviplata y transferencia Bancolombia; en Pereira también efectivo contra entrega. \
+            No recibimos tarjetas de crédito ni débito. Los datos para transferir los envía un asesor por el chat.
+
+            Productos (precio por unidad):
+            - Chaqueta de jean: $129.000. Tallas S, M y L.
+            - Camiseta oversize en negro, blanco y gris: $45.000. Tallas S, M, L y XL.
+            - Jogger en gris y negro: $79.000. Tallas S, M, L y XL.
+            - Pantalón cargo en verde oliva y beige: $99.000. Tallas 28, 30, 32, 34, 36, 38 y 40.
+            - Sudadera con capota (hoodie) en negro, gris y beige: $110.000. Tallas S, M, L y XL.
+            - Vestido midi floral (el de la última publicación): $95.000. Tallas XS, S, M y L.
+
+            Descuentos: no tenemos descuentos ni promociones, tampoco por cantidad. Los precios son los publicados.
+            Dotaciones para empresas y prendas bordadas con logo: las cotiza un asesor.
+            Cambios: dentro de los 30 días, con la etiqueta puesta.""";
+
+    /** Una respuesta rápida de la Tienda Demo. */
+    public record DemoQuickReply(String title, String text) {
+    }
+
+    /**
+     * Respuestas rápidas de la Tienda Demo: cubren las preguntas del guion de la demo en vivo, con los mismos datos
+     * de {@link #BUSINESS_INFO}. En "Respuesta automática" la IA solo puede enviar una de estas, tal cual.
+     */
+    public static final List<DemoQuickReply> QUICK_REPLIES = List.of(
+            new DemoQuickReply("Horarios",
+                    "Atendemos de lunes a sábado de 8:00 a. m. a 7:00 p. m. Domingos y festivos no abrimos."),
+            new DemoQuickReply("Festivos",
+                    "Los domingos y festivos no abrimos. Te esperamos de lunes a sábado de "
+                            + "8:00 a. m. a 7:00 p. m."),
+            new DemoQuickReply("Envíos",
+                    "Enviamos a toda Colombia. En Medellín y su área metropolitana cuesta $8.000 y llega el mismo día "
+                            + "si pides antes de las 2:00 p. m. Al resto del país cuesta $15.000 y llega en 2 a 4 días "
+                            + "hábiles."),
+            new DemoQuickReply("Contra entrega",
+                    "El pago contra entrega (en efectivo al recibir) solo está disponible en Pereira."),
+            new DemoQuickReply("Medios de pago",
+                    "Puedes pagar con Nequi, Daviplata o transferencia Bancolombia; en Pereira también en efectivo "
+                            + "contra entrega. No recibimos tarjetas de crédito ni débito."),
+            new DemoQuickReply("Tienda física",
+                    "Nuestra tienda física está en Medellín, barrio Laureles (carrera 76 # 34-20). También vendemos "
+                            + "por WhatsApp, Instagram y Facebook."),
+            new DemoQuickReply("Chaqueta de jean",
+                    "La chaqueta de jean vale $129.000 y la tenemos solo en tallas S, M y L."),
+            new DemoQuickReply("Camiseta oversize",
+                    "La camiseta oversize vale $45.000. Colores: negro, blanco y gris. Tallas: S, M, L y XL."),
+            new DemoQuickReply("Jogger",
+                    "El jogger vale $79.000. Colores: gris y negro. Tallas: S, M, L y XL."),
+            new DemoQuickReply("Pantalón cargo",
+                    "El pantalón cargo vale $99.000. Colores: verde oliva y beige. Tallas: 28, 30, 32, 34, 36, 38 "
+                            + "y 40."),
+            new DemoQuickReply("Sudadera con capota",
+                    "La sudadera con capota (hoodie) vale $110.000. Colores: negro, gris y beige. Tallas: S, M, L "
+                            + "y XL."),
+            new DemoQuickReply("Vestido floral",
+                    "El vestido midi floral de la última publicación vale $95.000. Tallas: XS, S, M y L."),
+            new DemoQuickReply("Zapatos y accesorios",
+                    "Solo vendemos ropa: no tenemos zapatos ni accesorios."),
+            new DemoQuickReply("Descuentos",
+                    "Por ahora no tenemos descuentos ni promociones, tampoco por cantidad: los precios son los "
+                            + "publicados."),
+            new DemoQuickReply("Cambios",
+                    "Puedes cambiar tu prenda dentro de los 30 días, con la etiqueta puesta."));
+
     private static final Logger log = LoggerFactory.getLogger(DemoData.class);
     private static final String ACCOUNT = "demo";
 
@@ -105,6 +188,7 @@ public class DemoData {
         User laura = agentService.create(tenantId, new CreateAgentRequest(AGENT_1_NAME, AGENT_1_EMAIL, DEMO_PASSWORD));
         User pedro = agentService.create(tenantId, new CreateAgentRequest(AGENT_2_NAME, AGENT_2_EMAIL, DEMO_PASSWORD));
         seedContent(tenantId, laura.getId(), pedro.getId());
+        configureAi(tenantId);
         log.info("Datos demo creados: empresa \"{}\" (dueño {}, agentes {} y {})", COMPANY, OWNER_EMAIL,
                 AGENT_1_EMAIL, AGENT_2_EMAIL);
         return true;
@@ -132,14 +216,27 @@ public class DemoData {
                 .and("email").nin(List.of(OWNER_EMAIL, AGENT_1_EMAIL, AGENT_2_EMAIL))), User.class);
         mongoTemplate.updateFirst(Query.query(Criteria.where("_id").is(tenantId)),
                 Update.update("settings.riskAlertMinutes", TenantSettings.DEFAULT_RISK_ALERT_MINUTES)
+                        // IA apagada mientras se cargan los chats de ejemplo: así no responde ninguno
+                        .set("settings.aiMode", AiMode.OFF)
                         .set("roundRobinCursor", 0L).set("name", COMPANY),
                 Tenant.class);
         resetUser(tenantId, OWNER_EMAIL, OWNER_NAME, Role.OWNER);
         String laura = resetUser(tenantId, AGENT_1_EMAIL, AGENT_1_NAME, Role.AGENT);
         String pedro = resetUser(tenantId, AGENT_2_EMAIL, AGENT_2_NAME, Role.AGENT);
         seedContent(tenantId, laura, pedro);
+        configureAi(tenantId);
         log.info("Datos demo restaurados: empresa \"{}\"", COMPANY);
         return tenantId;
+    }
+
+    /**
+     * IA en modo Sugerencias con la información del negocio de ejemplo. Se aplica DESPUÉS de cargar los chats, para
+     * que la IA no responda los mensajes de ejemplo. En la feria, el dueño puede pasarla a "Respuesta automática".
+     */
+    private void configureAi(String tenantId) {
+        mongoTemplate.updateFirst(Query.query(Criteria.where("_id").is(tenantId)),
+                Update.update("settings.aiMode", AiMode.SUGGEST).set("settings.businessInfo", BUSINESS_INFO),
+                Tenant.class);
     }
 
     /** Devuelve el usuario demo a su estado inicial (o lo vuelve a crear si se borró). Devuelve su id. */
@@ -162,7 +259,7 @@ public class DemoData {
         // --- Ana Ríos (WhatsApp): una conversación anterior resuelta y la actual En proceso con respuesta ---
         String anaOld = inbound(tenantId, ChannelType.WHATSAPP, "573001234567", "Ana Ríos",
                 "Hola, ¿hacen envíos a Medellín?", now.minus(Duration.ofDays(20)));
-        outbound(tenantId, anaOld, laura, "¡Hola Ana! Sí, enviamos a todo el país en 2 a 3 días hábiles.",
+        outbound(tenantId, anaOld, laura, "¡Hola Ana! Sí, enviamos a todo el país en 2 a 4 días hábiles.",
                 now.minus(Duration.ofDays(20)).plusSeconds(240), DeliveryStatus.READ, null);
         resolve(tenantId, anaOld);
         String ana = inbound(tenantId, ChannelType.WHATSAPP, "573001234567", "Ana Ríos",
@@ -215,13 +312,8 @@ public class DemoData {
                 now.minus(Duration.ofHours(25)).minus(Duration.ofMinutes(50)));
         assign(tenantId, luisa, laura);
 
-        // --- Respuestas rápidas ---
-        quickReplies.save(new QuickReply(tenantId, "Horarios",
-                "Atendemos de lunes a sábado de 8:00 a. m. a 7:00 p. m."));
-        quickReplies.save(new QuickReply(tenantId, "Envíos",
-                "Hacemos envíos a todo el país. En la ciudad cuesta $8.000 y llega el mismo día."));
-        quickReplies.save(new QuickReply(tenantId, "Medios de pago",
-                "Puedes pagar con Nequi, Daviplata, transferencia Bancolombia o en efectivo contra entrega."));
+        // --- Respuestas rápidas (también son lo único que envía la IA en "Respuesta automática") ---
+        QUICK_REPLIES.forEach(reply -> quickReplies.save(new QuickReply(tenantId, reply.title(), reply.text())));
     }
 
     // --- utilidades ---

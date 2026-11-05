@@ -1518,3 +1518,142 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+/* --- IA (Parte B) --- */
+:root {
+  --color-ai: #6a3fb5;
+  --color-ai-bg: #f1ebfb;
+}
+
+.ai-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.ai-indicator::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #9aa5ae;
+}
+
+.ai-ready::before {
+  background: #b794f4;
+}
+
+.ai-unavailable::before {
+  background: #f5a623;
+}
+
+.composer-modes .ai-suggest {
+  color: var(--color-ai);
+  font-weight: 600;
+}
+
+/* Con "Sugerir respuesta" visible, Respuestas rápidas ya no empuja al final: van juntos a la derecha */
+.composer-modes .quick-toggle + .ai-suggest {
+  margin-left: 0;
+}
+
+.composer-modes .ai-suggest:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.ai-hint {
+  color: var(--color-ai);
+}
+
+.bubble.automatic {
+  background: var(--color-ai-bg);
+  border: 1px solid #d6c6f2;
+}
+
+.auto-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--color-ai);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.2rem;
+}
+
+.bubble.ai-typing {
+  margin: 0;
+  background: var(--color-ai-bg);
+  border: 1px dashed #b794f4;
+  color: var(--color-ai);
+  font-style: italic;
+  animation: ai-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ai-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble.ai-typing {
+    animation: none;
+  }
+}
+
+.ai-settings textarea {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.6rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font: inherit;
+  resize: vertical;
+}
+
+.ai-modes {
+  border: 0;
+  margin: 0 0 1rem;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ai-modes legend {
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+.ai-mode {
+  display: flex;
+  gap: 0.6rem;
+  align-items: flex-start;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.ai-mode.selected {
+  border-color: var(--color-ai);
+  background: var(--color-ai-bg);
+}
+
+.ai-mode span {
+  display: grid;
+  gap: 0.15rem;
+}
+
+.ai-mode small {
+  color: var(--color-muted);
+}
+
+.field-help {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}

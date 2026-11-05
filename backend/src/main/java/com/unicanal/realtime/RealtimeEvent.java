@@ -25,6 +25,10 @@ public record RealtimeEvent(Type type, String conversationId, ConversationRespon
     public enum Type {
         MESSAGE_CREATED,
         CONVERSATION_UPDATED,
-        ASSIGNED
+        ASSIGNED,
+        /** La IA está escribiendo una respuesta automática (la interfaz muestra "La IA está escribiendo…"). */
+        AI_TYPING,
+        /** La IA desistió de responder: se quita el aviso. Si responde, el mensaje nuevo lo reemplaza. */
+        AI_TYPING_STOPPED
     }
 }

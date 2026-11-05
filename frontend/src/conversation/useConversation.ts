@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { apiFetch } from '../api/http'
 import type { Conversation, ConversationStatus, Message, Page } from '../api/types'
 import type { SubscribeToRealtime } from '../inbox/useInbox'
+import type { Suggestion } from './Composer'
 import { mergeMessages } from './messages'
 
 export const PAGE_SIZE = 30
+const AI_TYPING_MAX_MS = 30_000
 
 export interface ConversationData {
   conversation: Conversation | null
@@ -91,11 +93,25 @@ export function useConversation(conversationId: string, subscribe: SubscribeToRe
     }
   }, [conversationId, data.loadingOlder, data.hasOlder])
 
+  // "La IA está escribiendo…": se muestra con AI_TYPING y se quita al llegar la respuesta automática, si la IA
+  // desiste (AI_TYPING_STOPPED) o, por si se pierde el evento, a los 30 s.
+  const [aiTyping, setAiTyping] = useState(false)
+  const typingTimer = useRef<number | undefined>(undefined)
+  const setTyping = useCallback((typing: boolean) => {
+    window.clearTimeout(typingTimer.current)
+    setAiTyping(typing)
+    if (typing) typingTimer.current = window.setTimeout(() => setAiTyping(false), AI_TYPING_MAX_MS)
+  }, [])
+  useEffect(() => () => window.clearTimeout(typingTimer.current), [])
+
   // Tiempo real del chat abierto
   useEffect(
     () =>
       subscribe((event) => {
         if (event.conversationId !== conversationId) return
+        if (event.type === 'AI_TYPING') setTyping(true)
+        if (event.type === 'AI_TYPING_STOPPED') setTyping(false)
+        if (event.type === 'MESSAGE_CREATED' && event.message?.automatic) setTyping(false)
         setData((d) => ({
           ...d,
           conversation: event.conversation,
@@ -104,7 +120,13 @@ export function useConversation(conversationId: string, subscribe: SubscribeToRe
         const fromCustomer = event.type === 'MESSAGE_CREATED' && event.message?.direction === 'INBOUND'
         if (fromCustomer && document.visibilityState === 'visible') markRead()
       }),
-    [subscribe, conversationId, markRead],
+    [subscribe, conversationId, markRead, setTyping],
+  )
+
+  /** Pide a la IA una propuesta para el último mensaje del cliente (no envía nada). */
+  const suggest = useCallback(
+    () => apiFetch<Suggestion>(`/api/conversations/${conversationId}/ai/suggest`, { method: 'POST' }),
+    [conversationId],
   )
 
   /** Aplica la respuesta de una acción propia (también llegará por WebSocket; se deduplica). */
@@ -167,7 +189,7 @@ export function useConversation(conversationId: string, subscribe: SubscribeToRe
     [conversationId],
   )
 
-  return { ...data, loadOlder, send, retry, changeStatus, assign, markSale }
+  return { ...data, aiTyping, loadOlder, send, retry, changeStatus, assign, markSale, suggest }
 }
 
 export type ConversationChat = ReturnType<typeof useConversation>

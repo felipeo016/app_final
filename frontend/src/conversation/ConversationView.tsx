@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useAiStatus } from '../ai/aiStatus'
 import { friendlyError } from '../api/errors'
 import type { AssignableUser, Conversation } from '../api/types'
 import { CHANNEL_LABELS, channelClass, STATUS_LABELS, statusClass } from '../inbox/labels'
@@ -32,6 +33,7 @@ function useNow(intervalMs: number): number {
 
 export default function ConversationView({ chat, currentUserId, users, onBack, onShowProfile }: Props) {
   const quickReplies = useQuickReplies()
+  const ai = useAiStatus()
   const [actionError, setActionError] = useState<string | null>(null)
   const now = useNow(15_000)
 
@@ -103,6 +105,7 @@ export default function ConversationView({ chat, currentUserId, users, onBack, o
         onLoadOlder={() => void chat.loadOlder()}
         onRetry={(messageId) => runAction(() => chat.retry(messageId))}
         authorName={authorName}
+        aiTyping={chat.aiTyping}
       />
       {conversation.open ? (
         <Composer
@@ -110,6 +113,7 @@ export default function ConversationView({ chat, currentUserId, users, onBack, o
           quickReplies={quickReplies.replies}
           onOpenQuickReplies={quickReplies.refresh}
           onSend={chat.send}
+          onSuggest={ai && ai.mode !== 'OFF' ? chat.suggest : undefined}
         />
       ) : (
         // Conversación resuelta (también al abrirla desde el historial): solo lectura

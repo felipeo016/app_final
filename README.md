@@ -130,8 +130,9 @@ Qué incluye:
 | Jorge V. | Instagram | Nuevo | chat **en riesgo**: lleva 40 min sin respuesta |
 | Luisa M. | WhatsApp | En proceso | **ventana de 24 h cerrada**: no se puede responder con texto libre |
 
-Además hay tres **respuestas rápidas** (Horarios, Envíos, Medios de pago): escribe `/` en la caja de
-respuesta para usarlas.
+Además hay 15 **respuestas rápidas** (horarios, festivos, envíos, contra entrega, medios de pago,
+tienda física, cada producto, zapatos y accesorios, descuentos y cambios): escribe `/` en la caja de
+respuesta para usarlas. Son también lo único que envía la IA en "Respuesta automática".
 
 Los datos demo nunca envían nada a un canal real: los mensajes de los clientes entran por el mismo
 procesador que los webhooks y las respuestas se guardan como ya enviadas.
@@ -175,6 +176,95 @@ Invoke-RestMethod -Method Put "$B/api/tenant/settings" -Headers $h -ContentType 
 
 ---
 
+## IA local con Ollama (opcional)
+
+La IA corre en el mismo equipo, sin internet, con [Ollama](https://ollama.com) instalado directamente en
+Windows (no en Docker: Docker solo tiene unos 3,7 GB de RAM). Si Ollama está cerrado, la app funciona
+igual; el encabezado muestra "IA no disponible" y los chats los atiende el equipo.
+
+1. Instala Ollama y descarga el modelo (una sola vez; luego no hace falta internet):
+
+   ```powershell
+   winget install Ollama.Ollama
+   # Cierra y vuelve a abrir la terminal
+   ollama pull qwen2.5:3b
+   ```
+
+   Con 8 GB de RAM usa un modelo pequeño: `qwen2.5:3b` (responde mejor) o `qwen2.5:1.5b` (más rápido).
+   Para comparar la velocidad, mira la línea `eval rate` de
+   `ollama run qwen2.5:3b --verbose "Hola"`. Con 6 tokens/s o más, usa el de 3b.
+
+2. Ollama queda abierto en segundo plano (icono junto al reloj) y escucha en `http://localhost:11434`.
+   El backend precarga el modelo al arrancar y lo deja cargado (`keep_alive`), así que la primera
+   respuesta no tarda de más.
+
+3. En **Ajustes → Inteligencia artificial** (solo el dueño) elige el modo y escribe la
+   **Información del negocio** (horarios, envíos, medios de pago, productos con precios y tallas). En
+   **Respuestas rápidas** deja una por cada pregunta frecuente: en el modo automático la IA solo puede
+   enviar esas.
+
+| Modo | Qué hace |
+|---|---|
+| Apagada | sin IA |
+| Sugerencias | botón **Sugerir respuesta** en la caja de respuesta: muestra "Pensando…" y rellena la caja con un texto que **redacta** la IA a partir de la información del negocio y las respuestas rápidas; el agente lo revisa y lo envía |
+| Respuesta automática | **por selección, no por redacción**: la IA solo elige cuál respuesta rápida responde la pregunta (o ninguna) y se envía su texto **exacto**, con un saludo fijo ("Hola, Valentina."). Solo en chats que **ningún humano ha respondido todavía**, con la etiqueta "Respuesta automática" y tras mostrar "La IA está escribiendo…" de 2 a 4 s. Si ninguna aplica, el chat queda para el equipo |
+
+**Por qué por selección:** un modelo pequeño (3b) que redacta libremente a veces inventa datos (una
+talla que no existe, un descuento que no hay). Eligiendo una respuesta rápida, todo lo que recibe el
+cliente lo escribió la empresa: en el peor caso elige una respuesta que no viene al caso, pero nunca
+inventa. El modelo responde `{"respuestaRapidaId": "R3"}` o `null`; los códigos válidos se le pasan
+como lista cerrada (Ollama no le deja responder otra cosa). Si elige ninguna, un código que no existe
+o el JSON es inválido, no se envía nada.
+
+Chequeos fijos (sin modelo), que se aplican antes o después de consultarlo:
+
+- **Temas para una persona**: si el último mensaje habla del estado de un pedido, un pago o
+  comprobante, los datos para transferir, una cotización o dotación, un reclamo o una devolución, o
+  pide hablar con alguien, ni siquiera se consulta al modelo (en los dos modos).
+- **Catálogo** (modo Sugerencias): si la respuesta nombra un producto de la información del negocio,
+  las tallas y colores que menciona deben estar en la línea de ese producto; y se descartan frases como
+  "todas las tallas" o "cualquier color".
+
+**Consejo al escribir la información del negocio:** pon las tallas una por una ("Tallas 28, 30, 32,
+34, 36, 38 y 40"), no como rango ("28 a 40"): un modelo pequeño lee mal los rangos. Lo mismo con
+colores y ciudades: lista explícita, y di también lo que **no** hay ("No vendemos zapatos ni
+accesorios", "Contra entrega solo en Pereira").
+
+Detalles:
+
+- La IA corre en segundo plano: nunca retrasa la llegada de los mensajes a la bandeja.
+- Las respuestas automáticas no cuentan como primera respuesta (`firstResponseAt`): solo sacan el chat
+  de "Sin responder" y le quitan la alerta de riesgo. En cuanto un agente responde, la IA deja ese chat.
+- Solo se envían al modelo los últimos 10 mensajes. El texto del cliente se trata como dato: la IA
+  ignora las órdenes que vengan dentro de un mensaje ("ignora tus instrucciones…").
+- La Tienda Demo trae información del negocio y 15 respuestas rápidas que cubren las preguntas de la
+  demo en vivo, con la IA en modo **Sugerencias**. Para mostrar la respuesta automática, cámbiala en
+  Ajustes (y "Restaurar datos demo" la devuelve a Sugerencias).
+
+**Evaluación con Ollama real** (solo en desarrollo; no forma parte de `mvnw verify` porque necesita
+Ollama abierto). Envía 35 preguntas (las del guion de la demo en vivo y casos difíciles) a una empresa
+con los datos de la Tienda Demo e imprime, por pregunta, qué respuesta rápida eligió la IA o si la dejó
+para el equipo. Falla si alguna respuesta enviada no es exactamente una respuesta rápida:
+
+```powershell
+cd backend
+.\mvnw.cmd test -Dtest=AiEvaluation -Dai.eval=true
+```
+
+Resultado con `qwen2.5:3b` (5 nov 2026): 27 bien, 7 quedaron para el equipo, 1 respuesta que no venía
+al caso ("¿camisetas de la Selección Colombia?" → la de la camiseta oversize) y **0 con datos
+inventados**.
+
+Variables (en `.env` o en la terminal del backend; todas opcionales):
+
+| Variable | Por defecto | Para qué |
+|---|---|---|
+| `OLLAMA_URL` | `http://localhost:11434` | dónde escucha Ollama |
+| `OLLAMA_MODEL` | `qwen2.5:3b` | modelo a usar (debe estar descargado con `ollama pull`) |
+| `OLLAMA_TIMEOUT_SECONDS` | `30` | tiempo máximo de una respuesta |
+| `OLLAMA_KEEP_ALIVE` | `24h` | cuánto tiempo queda el modelo cargado tras cada uso |
+| `OLLAMA_WARM_UP` | `true` | precargar el modelo al arrancar el backend |
+
 ## Cómo se usa
 
 - **Bandeja** (columna izquierda): por defecto solo los chats abiertos (Nuevo y En proceso); el filtro
@@ -188,7 +278,8 @@ Invoke-RestMethod -Method Put "$B/api/tenant/settings" -Headers $h -ContentType 
 - **Perfil del cliente** (derecha): nombre y notas editables, canales, historial de conversaciones,
   estado, asignación (el dueño elige a cualquiera; un agente puede "Tomar" o "Soltar") y venta en
   pesos colombianos.
-- **Agentes** y **Ajustes** (solo el dueño): crear y desactivar agentes, y minutos de la alerta.
+- **Agentes** y **Ajustes** (solo el dueño): crear y desactivar agentes, minutos de la alerta y la IA.
+- **Encabezado**: "IA lista", "IA apagada" o "IA no disponible" (se actualiza cada 15 s).
 - En el celular se ve una columna a la vez, con botones para volver a la bandeja.
 
 La sesión (JWT) se guarda en `sessionStorage`: dura lo que la pestaña. Si el token vence, el backend
@@ -205,7 +296,10 @@ Todas las rutas, salvo login, registro, webhooks y salud, piden `Authorization: 
 | GET | `/api/auth/me` | autenticado | usuario y empresa actuales |
 | GET / POST | `/api/agents` · PATCH `/api/agents/{id}/deactivate` | OWNER | equipo |
 | GET | `/api/users/assignable` | autenticado | usuarios activos a los que se puede asignar un chat |
-| GET / PUT | `/api/tenant/settings` | OWNER | minutos de la alerta de riesgo (1 a 1440) |
+| GET / PUT | `/api/tenant/settings` | OWNER | minutos de la alerta de riesgo (1 a 1440); el GET incluye los ajustes de IA |
+| PUT | `/api/tenant/settings/ai` | OWNER | modo de la IA (`OFF`, `SUGGEST`, `AUTO`) e información del negocio (hasta 4000 caracteres) |
+| GET | `/api/ai/status` | autenticado | `READY` ("IA lista"), `OFF` ("IA apagada") o `UNAVAILABLE` ("IA no disponible") |
+| POST | `/api/conversations/{id}/ai/suggest` | autenticado | propone una respuesta sin enviarla (`canAnswer`, `text`); 409 si la IA está apagada, 503 si Ollama no responde |
 | GET | `/api/conversations?open&status&channel&assignee&unanswered&size&before` | autenticado | bandeja; `open=true` = solo abiertas; `before` = `nextCursor` anterior ("Cargar más") |
 | GET | `/api/conversations/{id}` · `/messages?page&size` | autenticado | conversación y mensajes |
 | POST | `/api/conversations/{id}/messages` · `/notes` · `/read` | autenticado | responder, nota interna, marcar leído |
@@ -251,6 +345,8 @@ npm test
 | Los datos demo no aparecen aunque `SEED_DEMO=true` | ya existía `dueno@tiendademo.test` (es idempotente); para recrearlos borra la base con `docker compose down -v` |
 | Un `Invoke-RestMethod` con tildes responde 400 | falta `; charset=utf-8` en `-ContentType` (Windows PowerShell 5.1) |
 | Al abrir otra pestaña pide iniciar sesión | es lo esperado: la sesión vive en `sessionStorage`, una por pestaña |
+| El encabezado dice "IA no disponible" | Ollama está cerrado (ábrelo desde el menú Inicio) o falta el modelo: `ollama pull qwen2.5:3b` |
+| La IA no responde una pregunta | el dato no está en la Información del negocio (Ajustes): es lo esperado, el chat queda para el equipo |
 | El puerto 8090 o 5173 está ocupado | cambia `SERVER_PORT` en `.env` (y `VITE_BACKEND_URL`) o cierra el otro proceso |
 
 Más detalle técnico en [`docs/arquitectura.md`](docs/arquitectura.md).

@@ -3,6 +3,12 @@ import { friendlyError } from '../api/errors'
 import type { QuickReply } from './quickReplies'
 import { slashQuery } from './messages'
 
+/** Respuesta de "Sugerir respuesta": canAnswer = false si la información del negocio no alcanza. */
+export interface Suggestion {
+  canAnswer: boolean
+  text: string | null
+}
+
 interface Props {
   /** Motivo por el que no se puede responder al cliente (ventana cerrada, chat resuelto); null si se puede. */
   replyBlockedReason: string | null
@@ -10,19 +16,27 @@ interface Props {
   /** Se llama cada vez que se abre el selector (con el botón o con "/"). */
   onOpenQuickReplies: () => void
   onSend: (text: string, asNote: boolean) => Promise<void>
+  /** "Sugerir respuesta": solo si la IA está en Sugerencias o Respuesta automática; sin ella no hay botón. */
+  onSuggest?: () => Promise<Suggestion>
 }
+
+const SUGGESTION_HINT = 'Sugerencia de la IA: revísala y edítala si hace falta antes de enviarla.'
+const NO_SUGGESTION_HINT =
+  'La IA no encontró en la información del negocio cómo responder esto, así que no inventa nada. Respóndelo tú.'
 
 /**
  * Caja de respuesta con dos modos: responder al cliente o nota interna. Las respuestas rápidas se abren con
  * el botón o escribiendo "/" al inicio (lo que sigue filtra); ↑/↓ eligen, Enter inserta, Esc cierra.
  */
-export default function Composer({ replyBlockedReason, quickReplies, onOpenQuickReplies, onSend }: Props) {
+export default function Composer({ replyBlockedReason, quickReplies, onOpenQuickReplies, onSend, onSuggest }: Props) {
   const [text, setText] = useState('')
   const [asNote, setAsNote] = useState(false)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [highlight, setHighlight] = useState(0)
+  const [thinking, setThinking] = useState(false)
+  const [aiHint, setAiHint] = useState<string | null>(null)
 
   const query = slashQuery(text)
   const showPicker = pickerOpen || query !== null
@@ -37,6 +51,27 @@ export default function Composer({ replyBlockedReason, quickReplies, onOpenQuick
   const blocked = !asNote && replyBlockedReason !== null
   const canSend = text.trim().length > 0 && !sending && !blocked
 
+  async function suggest() {
+    if (!onSuggest || thinking) return
+    setThinking(true)
+    setError(null)
+    setAiHint(null)
+    try {
+      const suggestion = await onSuggest()
+      if (suggestion.canAnswer && suggestion.text) {
+        // Rellena la caja: el agente la revisa, la edita y la envía él mismo
+        setText(suggestion.text)
+        setAiHint(SUGGESTION_HINT)
+      } else {
+        setAiHint(NO_SUGGESTION_HINT)
+      }
+    } catch (err) {
+      setError(friendlyError(err))
+    } finally {
+      setThinking(false)
+    }
+  }
+
   function choose(reply: QuickReply) {
     setText(reply.text)
     setPickerOpen(false)
@@ -49,6 +84,7 @@ export default function Composer({ replyBlockedReason, quickReplies, onOpenQuick
     try {
       await onSend(text.trim(), asNote)
       setText('')
+      setAiHint(null)
     } catch (err) {
       setError(friendlyError(err))
     } finally {
@@ -107,6 +143,11 @@ export default function Composer({ replyBlockedReason, quickReplies, onOpenQuick
         >
           Respuestas rápidas
         </button>
+        {onSuggest && !asNote && !blocked && (
+          <button type="button" className="ai-suggest" onClick={() => void suggest()} disabled={thinking || sending}>
+            {thinking ? 'Pensando…' : '✨ Sugerir respuesta'}
+          </button>
+        )}
       </div>
 
       {showPicker && (
@@ -135,6 +176,11 @@ export default function Composer({ replyBlockedReason, quickReplies, onOpenQuick
         </ul>
       )}
 
+      {aiHint && !asNote && (
+        <p className="composer-hint ai-hint" role="status">
+          {aiHint}
+        </p>
+      )}
       {asNote && <p className="composer-hint note-hint">La nota solo la ven los agentes; el cliente no la recibe.</p>}
       {blocked && (
         <p className="composer-hint blocked-hint" role="status">

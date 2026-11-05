@@ -10,6 +10,8 @@ interface Props {
   onRetry: (messageId: string) => Promise<void>
   /** Nombre de quien escribió (agente) a partir de su id. */
   authorName: (userId: string | null) => string
+  /** La IA está preparando una respuesta automática en este chat. */
+  aiTyping?: boolean
 }
 
 const NEAR_TOP_PX = 80
@@ -19,7 +21,15 @@ const NEAR_BOTTOM_PX = 120
  * Historial del chat. Al subir hasta arriba pide la página anterior y conserva la posición de lectura;
  * al llegar un mensaje nuevo baja al final solo si el agente ya estaba abajo (no le mueve la lectura).
  */
-export default function MessageList({ messages, hasOlder, loadingOlder, onLoadOlder, onRetry, authorName }: Props) {
+export default function MessageList({
+  messages,
+  hasOlder,
+  loadingOlder,
+  onLoadOlder,
+  onRetry,
+  authorName,
+  aiTyping = false,
+}: Props) {
   const scrollRef = useRef<HTMLDivElement>(null)
   const previous = useRef({ firstId: '', lastId: '', scrollHeight: 0, nearBottom: true })
 
@@ -48,6 +58,12 @@ export default function MessageList({ messages, hasOlder, loadingOlder, onLoadOl
     }
   }, [messages])
 
+  // El aviso de la IA aparece al final: se baja a verlo si el agente ya estaba abajo
+  useLayoutEffect(() => {
+    const element = scrollRef.current
+    if (aiTyping && element && previous.current.nearBottom) element.scrollTop = element.scrollHeight
+  }, [aiTyping])
+
   function handleScroll() {
     const element = scrollRef.current
     if (!element) return
@@ -68,6 +84,13 @@ export default function MessageList({ messages, hasOlder, loadingOlder, onLoadOl
       {messages.map((message) => (
         <MessageBubble key={message.id} message={message} onRetry={onRetry} authorName={authorName} />
       ))}
+      {aiTyping && (
+        <div className="bubble-row outbound-row">
+          <p className="bubble outbound ai-typing" role="status">
+            La IA está escribiendo…
+          </p>
+        </div>
+      )}
     </div>
   )
 }
@@ -119,10 +142,13 @@ function MessageBubble({ message, onRetry, authorName }: BubbleProps) {
 
   return (
     <div className={`bubble-row ${outbound ? 'outbound-row' : 'inbound-row'}`}>
-      <div className={`bubble ${outbound ? 'outbound' : 'inbound'}${failed ? ' failed' : ''}`}>
+      <div
+        className={`bubble ${outbound ? 'outbound' : 'inbound'}${failed ? ' failed' : ''}${message.automatic ? ' automatic' : ''}`}
+      >
+        {message.automatic && <span className="auto-label">Respuesta automática</span>}
         <p className="bubble-text">{message.content}</p>
         <span className="bubble-meta">
-          {outbound && <>{authorName(message.sentBy)} · </>}
+          {outbound && <>{message.automatic ? 'IA' : authorName(message.sentBy)} · </>}
           {time(message)}
           {outbound && message.deliveryStatus && !failed && (
             <span className={`delivery delivery-${message.deliveryStatus.toLowerCase()}`}>

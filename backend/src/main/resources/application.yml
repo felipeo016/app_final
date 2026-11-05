@@ -47,6 +47,19 @@ app:
   # Cada cuánto se cierran los envíos que quedaron en PENDING más de 5 min (pasan a "sin confirmar")
   pending-sweep:
     check-ms: 60000
+  # IA local con Ollama (instalado en Windows, fuera de Docker). Si no responde, la app sigue igual sin IA.
+  # El modo (Apagada / Sugerencias / Respuesta automática) se elige por empresa en Ajustes.
+  ai:
+    base-url: ${OLLAMA_URL:http://localhost:11434}
+    model: ${OLLAMA_MODEL:qwen2.5:3b}
+    timeout: ${OLLAMA_TIMEOUT_SECONDS:30}s
+    # Cuánto tiempo queda el modelo cargado tras cada uso (formato de Ollama: 30m, 24h...)
+    keep-alive: ${OLLAMA_KEEP_ALIVE:24h}
+    # Precargar el modelo al arrancar el backend (la primera respuesta no tarda de más)
+    warm-up: ${OLLAMA_WARM_UP:true}
+    # Espera antes de enviar una respuesta automática, mostrando "La IA está escribiendo…"
+    typing-delay-min: 2s
+    typing-delay-max: 4s
 
 management:
   endpoints:

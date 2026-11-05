@@ -232,7 +232,7 @@ public class ConversationService {
         return get(tenantId, conversationId);
     }
 
-    Conversation find(String tenantId, String conversationId) {
+    public Conversation find(String tenantId, String conversationId) {
         return conversations.findByIdAndTenantId(conversationId, tenantId)
                 .orElseThrow(ConversationService::notFound);
     }
