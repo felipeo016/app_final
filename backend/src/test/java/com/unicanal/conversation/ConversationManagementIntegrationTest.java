@@ -482,6 +482,24 @@ class ConversationManagementIntegrationTest {
     }
 
     @Test
+    void theOpenFilterShowsOnlyNewAndInProgressOrOnlyResolved() throws Exception {
+        Session owner = support.newCompany();
+        String fresh = support.inbound(owner, ChannelType.SIMULATED);
+        String working = support.inbound(owner, ChannelType.SIMULATED);
+        support.changeStatus(owner, working, "IN_PROGRESS").andExpect(status().isOk());
+        String done = support.inbound(owner, ChannelType.SIMULATED);
+        support.changeStatus(owner, done, "RESOLVED").andExpect(status().isOk());
+
+        String open = support.getAs(owner, "/api/conversations?open=true").andReturn().getResponse()
+                .getContentAsString();
+        assertThat(JsonPath.<List<String>>read(open, "$.items[*].id")).containsExactlyInAnyOrder(fresh, working);
+        String resolved = support.getAs(owner, "/api/conversations?open=false").andReturn().getResponse()
+                .getContentAsString();
+        assertThat(JsonPath.<List<String>>read(resolved, "$.items[*].id")).containsExactly(done);
+        support.getAs(owner, "/api/conversations").andExpect(jsonPath("$.totalItems").value(3));
+    }
+
+    @Test
     void anInvalidCursorIsAValidationError() throws Exception {
         Session owner = support.newCompany();
         for (String bad : new String[] {"abc", "123", "x_id", "_"}) {

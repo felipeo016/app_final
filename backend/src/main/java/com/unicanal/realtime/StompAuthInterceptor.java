@@ -73,7 +73,7 @@ public class StompAuthInterceptor implements ChannelInterceptor {
         AuthPrincipal principal = verified.principal();
         accessor.setUser(new StompPrincipal(principal));
         // La sesión vive como mucho lo que el token: al vencer se cierra (ver WebSocketSessionRegistry)
-        sessions.bind(accessor.getSessionId(), principal.userId(), verified.expiresAt());
+        sessions.bind(accessor.getSessionId(), principal.userId(), principal.tenantId(), verified.expiresAt());
     }
 
     private void authorizeSubscription(StompHeaderAccessor accessor) {

@@ -3,20 +3,27 @@ import { toMillis, type ChannelType, type Conversation, type ConversationStatus 
 /** Conversaciones por página de la bandeja ("Cargar más" pide la siguiente). */
 export const INBOX_PAGE_SIZE = 25
 
+/**
+ * Estado que muestra la bandeja: 'OPEN' (por defecto: Nuevo y En proceso), 'ALL' (también las resueltas) o un
+ * estado concreto. Las resueltas siguen visibles en el historial del perfil del cliente.
+ */
+export type StatusFilter = 'OPEN' | 'ALL' | ConversationStatus
+
 /** Filtros de la bandeja. {@code assignee}: '' = todos, 'me', 'unassigned' o el id de un usuario. */
 export interface InboxFilters {
-  status: ConversationStatus | ''
+  status: StatusFilter
   channel: ChannelType | ''
   assignee: string
   unanswered: boolean
 }
 
-export const DEFAULT_FILTERS: InboxFilters = { status: '', channel: '', assignee: '', unanswered: false }
+export const DEFAULT_FILTERS: InboxFilters = { status: 'OPEN', channel: '', assignee: '', unanswered: false }
 
 /** Parámetros de GET /api/conversations para estos filtros (y, si se indica, el cursor de "Cargar más"). */
 export function filtersToQuery(filters: InboxFilters, size = INBOX_PAGE_SIZE, before?: string | null): string {
   const params = new URLSearchParams()
-  if (filters.status) params.set('status', filters.status)
+  if (filters.status === 'OPEN') params.set('open', 'true')
+  else if (filters.status !== 'ALL') params.set('status', filters.status)
   if (filters.channel) params.set('channel', filters.channel)
   if (filters.assignee) params.set('assignee', filters.assignee)
   if (filters.unanswered) params.set('unanswered', 'true')
@@ -39,7 +46,8 @@ export function isUnanswered(conversation: Conversation): boolean {
  * mismas reglas que aplica el backend al listar.
  */
 export function matchesFilters(conversation: Conversation, filters: InboxFilters, currentUserId: string): boolean {
-  if (filters.status && conversation.status !== filters.status) return false
+  if (filters.status === 'OPEN' && !conversation.open) return false
+  if (filters.status !== 'OPEN' && filters.status !== 'ALL' && conversation.status !== filters.status) return false
   if (filters.channel && conversation.channel !== filters.channel) return false
   const assignee = conversation.assignedTo?.id ?? null
   if (filters.assignee === 'me' && assignee !== currentUserId) return false

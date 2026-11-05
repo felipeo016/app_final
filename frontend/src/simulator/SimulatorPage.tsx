@@ -8,6 +8,7 @@ import { DELIVERY_LABELS } from '../conversation/messages'
 import { CHANNEL_LABELS } from '../inbox/labels'
 import AppHeader from '../layout/AppHeader'
 import { useSimulatorAvailable } from '../layout/useSimulatorAvailable'
+import { LiveDemoPanel, RestoreDemoPanel } from './DemoPanels'
 
 /**
  * Herramientas para probar sin canales reales (solo con el backend en perfil dev): un cliente escribe,
@@ -35,9 +36,11 @@ export default function SimulatorPage() {
               Simula lo que harían los clientes y los canales. Todo ocurre en tu empresa y llega a la{' '}
               <Link to="/">bandeja</Link> en tiempo real, igual que un mensaje real.
             </p>
+            <LiveDemoPanel />
             <InboundForm />
             <DeliveryStatusPanel />
             <SendFailuresPanel />
+            <RestoreDemoPanel />
           </>
         )}
       </main>

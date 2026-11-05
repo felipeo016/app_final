@@ -1,5 +1,5 @@
 import type { AssignableUser, ChannelType, ConversationStatus } from '../api/types'
-import type { InboxFilters } from './inboxState'
+import type { InboxFilters, StatusFilter } from './inboxState'
 import { CHANNEL_LABELS, STATUS_LABELS } from './labels'
 
 interface Props {
@@ -13,12 +13,9 @@ export default function InboxFiltersBar({ filters, users, onChange }: Props) {
 
   return (
     <div className="filters">
-      <select
-        aria-label="Estado"
-        value={filters.status}
-        onChange={(e) => set('status', e.target.value as ConversationStatus | '')}
-      >
-        <option value="">Todos los estados</option>
+      <select aria-label="Estado" value={filters.status} onChange={(e) => set('status', e.target.value as StatusFilter)}>
+        <option value="OPEN">Abiertas (Nuevo y En proceso)</option>
+        <option value="ALL">Todas (con resueltas)</option>
         {(Object.keys(STATUS_LABELS) as ConversationStatus[]).map((status) => (
           <option key={status} value={status}>
             {STATUS_LABELS[status]}

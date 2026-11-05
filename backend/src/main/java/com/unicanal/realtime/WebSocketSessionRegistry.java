@@ -40,7 +40,7 @@ public class WebSocketSessionRegistry implements WebSocketHandlerDecoratorFactor
         this.clock = clock;
     }
 
-    private record SessionOwner(String userId, Instant tokenExpiresAt) {
+    private record SessionOwner(String userId, String tenantId, Instant tokenExpiresAt) {
     }
 
     @Override
@@ -62,13 +62,21 @@ public class WebSocketSessionRegistry implements WebSocketHandlerDecoratorFactor
     }
 
     /** Asocia la sesión al usuario validado en el CONNECT y al vencimiento de su token. */
-    void bind(String sessionId, String userId, Instant tokenExpiresAt) {
-        owners.put(sessionId, new SessionOwner(userId, tokenExpiresAt));
+    void bind(String sessionId, String userId, String tenantId, Instant tokenExpiresAt) {
+        owners.put(sessionId, new SessionOwner(userId, tenantId, tokenExpiresAt));
     }
 
     /** Cierra todas las sesiones abiertas del usuario. Devuelve cuántas cerró. */
     public int closeSessionsOf(String userId, CloseStatus status) {
         return closeWhere(owner -> owner.userId().equals(userId), status);
+    }
+
+    /**
+     * Cierra todas las sesiones de una empresa con 1012 (reinicio del servicio): no es un fin de sesión, así que
+     * los clientes se reconectan solos y, al reconectar, recargan la bandeja. Lo usa "Restaurar datos demo".
+     */
+    public int closeSessionsOfTenant(String tenantId, String reason) {
+        return closeWhere(owner -> tenantId.equals(owner.tenantId()), CloseStatus.SERVICE_RESTARTED.withReason(reason));
     }
 
     /**

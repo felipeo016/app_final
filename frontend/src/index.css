@@ -1374,6 +1374,39 @@ select {
   font-size: 1.05rem;
 }
 
+.live-demo-on {
+  border: 2px solid var(--color-accent);
+}
+
+.live-demo-head {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.live-badge {
+  background: var(--color-risk);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  animation: live-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-badge {
+    animation: none;
+  }
+}
+
 .sim-form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

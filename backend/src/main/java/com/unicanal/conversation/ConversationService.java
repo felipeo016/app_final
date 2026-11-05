@@ -67,7 +67,7 @@ public class ConversationService {
      */
     public PageResponse<ConversationResponse> list(AuthPrincipal principal, ConversationStatus status,
             ChannelType channel, String assignee, boolean unanswered, int page, int size) {
-        return list(principal, status, channel, assignee, unanswered, null, page, size);
+        return list(principal, status, channel, assignee, unanswered, null, null, page, size);
     }
 
     /**
@@ -76,9 +76,11 @@ public class ConversationService {
      * @param before cursor de "Cargar más" ({@code nextCursor} de la respuesta anterior): devuelve las
      *               conversaciones que van DESPUÉS de esa en el orden. A diferencia de pedir la página N, no se
      *               salta ni repite conversaciones aunque entre peticiones alguna cambie de estado o de filtro.
+     * @param open   true: solo abiertas (Nuevo y En proceso), false: solo resueltas, nulo: todas
      */
     public PageResponse<ConversationResponse> list(AuthPrincipal principal, ConversationStatus status,
-            ChannelType channel, String assignee, boolean unanswered, String before, int page, int size) {
+            ChannelType channel, String assignee, boolean unanswered, Boolean open, String before, int page,
+            int size) {
         int safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
         Cursor cursor = Cursor.parse(before);
         int safePage = cursor != null ? 0 : Math.max(page, 0);
@@ -90,6 +92,9 @@ public class ConversationService {
         }
         if (channel != null) {
             filters.add(Criteria.where("channel").is(channel));
+        }
+        if (open != null) {
+            filters.add(Criteria.where("open").is(open));
         }
         if (assignee != null && !assignee.isBlank()) {
             filters.add(switch (assignee) {

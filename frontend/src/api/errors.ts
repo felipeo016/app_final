@@ -23,6 +23,7 @@ const BY_CODE: Record<string, string> = {
   CANNOT_DEACTIVATE_OWNER: 'No se puede desactivar al dueño de la empresa.',
   AGENT_NOT_FOUND: 'Ese agente ya no existe.',
   CONTACT_NOT_FOUND: 'Ese cliente ya no existe.',
+  NOT_DEMO_COMPANY: 'Solo se pueden restaurar los datos demo desde la empresa "Tienda Demo". Inicia sesión con una cuenta demo.',
 }
 
 const BY_STATUS: Record<number, string> = {

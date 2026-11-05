@@ -84,6 +84,10 @@ class DevSimulatorDisabledIntegrationTest {
     @Test
     void theDemoSeederDoesNotRunOutsideDevEvenWithSeedDemoTrue() {
         assertThat(context.getBeansOfType(DevDataSeeder.class)).isEmpty();
+        // Tampoco la demo en vivo ni "Restaurar datos demo"
+        assertThat(context.getBeansOfType(com.unicanal.demo.LiveDemoService.class)).isEmpty();
+        assertThat(context.getBeansOfType(com.unicanal.demo.DemoRestoreService.class)).isEmpty();
+        assertThat(context.getBeansOfType(com.unicanal.demo.DemoData.class)).isEmpty();
         assertThat(users.existsByEmail(DevDataSeeder.OWNER_EMAIL)).isFalse();
     }
 }

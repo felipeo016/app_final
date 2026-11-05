@@ -43,8 +43,9 @@ const filters = (overrides: Partial<InboxFilters>): InboxFilters => ({ ...DEFAUL
 
 describe('filtros', () => {
   it('arma la consulta solo con los filtros activos', () => {
-    expect(filtersToQuery(DEFAULT_FILTERS)).toBe('size=25')
-    expect(filtersToQuery(DEFAULT_FILTERS, 25, '1730000000000_abc')).toBe('size=25&before=1730000000000_abc')
+    expect(filtersToQuery(DEFAULT_FILTERS)).toBe('open=true&size=25')
+    expect(filtersToQuery(DEFAULT_FILTERS, 25, '1730000000000_abc')).toBe('open=true&size=25&before=1730000000000_abc')
+    expect(filtersToQuery({ ...DEFAULT_FILTERS, status: 'ALL' })).toBe('size=25')
     expect(filtersToQuery(filters({ status: 'NEW', channel: 'FACEBOOK', assignee: 'me', unanswered: true }))).toBe(
       'status=NEW&channel=FACEBOOK&assignee=me&unanswered=true&size=25',
     )
@@ -60,6 +61,18 @@ describe('filtros', () => {
     expect(matchesFilters(mine, filters({ assignee: 'otro' }), ME)).toBe(false)
     expect(matchesFilters(mine, filters({ assignee: ME }), ME)).toBe(true)
     expect(matchesFilters(conversation('b'), filters({ assignee: 'unassigned' }), ME)).toBe(true)
+  })
+
+  it('por defecto solo muestra las abiertas; "Todas" incluye las resueltas', () => {
+    const resolved = conversation('r', { status: 'RESOLVED', open: false })
+    const working = conversation('w', { status: 'IN_PROGRESS' })
+    expect(DEFAULT_FILTERS.status).toBe('OPEN')
+    expect(matchesFilters(conversation('n'), DEFAULT_FILTERS, ME)).toBe(true)
+    expect(matchesFilters(working, DEFAULT_FILTERS, ME)).toBe(true)
+    expect(matchesFilters(resolved, DEFAULT_FILTERS, ME)).toBe(false)
+    expect(matchesFilters(resolved, filters({ status: 'ALL' }), ME)).toBe(true)
+    expect(matchesFilters(resolved, filters({ status: 'RESOLVED' }), ME)).toBe(true)
+    expect(matchesFilters(working, filters({ status: 'RESOLVED' }), ME)).toBe(false)
   })
 
   it('"sin responder": abierta y con mensaje del cliente posterior a la última respuesta', () => {

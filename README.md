@@ -140,6 +140,15 @@ procesador que los webhooks y las respuestas se guardan como ya enviadas.
 
 Con el backend en perfil `dev`, el menú muestra **Simulador**. Desde ahí puedes:
 
+- **Demo en vivo**: con "Iniciar demo en vivo", cada 20 a 40 segundos (al azar) escribe un cliente por
+  WhatsApp, Instagram o Facebook, siguiendo un guion de 18 mensajes de una tienda de ropa (tallas,
+  precios, envíos, Nequi, cotizaciones, horarios). Corre en el backend: sigue aunque cambies de página
+  o cierres la pestaña, hasta que pulses "Detener", restaures los datos o apagues el backend. No
+  necesita internet.
+- **Restaurar datos demo**: deja "Tienda Demo" como recién creada (detiene la demo en vivo, borra
+  chats, mensajes y respuestas rápidas, quita los agentes agregados y reactiva a Laura y Pedro). Pide
+  confirmación. La sesión sigue abierta y los demás navegadores conectados se recargan solos. Solo
+  funciona estando dentro de "Tienda Demo".
 - hacer que **un cliente escriba** por cualquier canal, ahora o "en el pasado": hace 20 minutos (para
   ver la alerta de riesgo) o hace 25 horas (para ver cerrada la ventana de 24 h de WhatsApp);
 - hacer que **el canal informe** que una respuesta fue entregada, leída o no se envió;
@@ -168,8 +177,10 @@ Invoke-RestMethod -Method Put "$B/api/tenant/settings" -Headers $h -ContentType 
 
 ## Cómo se usa
 
-- **Bandeja** (columna izquierda): todos los chats de la empresa, con filtros por estado, canal,
-  asignado y "Sin responder". Un chat en riesgo se resalta en rojo con "lleva X min sin respuesta".
+- **Bandeja** (columna izquierda): por defecto solo los chats abiertos (Nuevo y En proceso); el filtro
+  de estado permite ver "Todas (con resueltas)" o un estado concreto. Las conversaciones resueltas
+  siguen en el historial del perfil del cliente. También filtra por canal, asignado y "Sin responder".
+  Un chat en riesgo se resalta en rojo con "lleva X min sin respuesta".
   Muestra 25 chats y **Cargar más** trae los siguientes.
 - **Conversación** (centro): historial paginado, respuestas al cliente, notas internas (amarillas,
   el cliente no las ve), respuestas rápidas con `/`, estado de entrega de cada mensaje y contador de
@@ -195,7 +206,7 @@ Todas las rutas, salvo login, registro, webhooks y salud, piden `Authorization: 
 | GET / POST | `/api/agents` · PATCH `/api/agents/{id}/deactivate` | OWNER | equipo |
 | GET | `/api/users/assignable` | autenticado | usuarios activos a los que se puede asignar un chat |
 | GET / PUT | `/api/tenant/settings` | OWNER | minutos de la alerta de riesgo (1 a 1440) |
-| GET | `/api/conversations?status&channel&assignee&unanswered&size&before` | autenticado | bandeja; `before` = `nextCursor` de la respuesta anterior ("Cargar más") |
+| GET | `/api/conversations?open&status&channel&assignee&unanswered&size&before` | autenticado | bandeja; `open=true` = solo abiertas; `before` = `nextCursor` anterior ("Cargar más") |
 | GET | `/api/conversations/{id}` · `/messages?page&size` | autenticado | conversación y mensajes |
 | POST | `/api/conversations/{id}/messages` · `/notes` · `/read` | autenticado | responder, nota interna, marcar leído |
 | POST | `/api/conversations/{id}/messages/{messageId}/retry` | autenticado | reintentar un envío fallido |
@@ -204,7 +215,7 @@ Todas las rutas, salvo login, registro, webhooks y salud, piden `Authorization: 
 | GET / PATCH | `/api/contacts/{id}` | autenticado | perfil del cliente |
 | GET · POST/PUT/DELETE | `/api/quick-replies` | todos · OWNER | respuestas rápidas |
 | GET / POST | `/api/webhooks/whatsapp` | público (firma) | webhook de Meta |
-| `/api/dev/**` | | solo perfil `dev` | simulador |
+| `/api/dev/**` | | solo perfil `dev` | simulador, demo en vivo (`/live-demo`, `/start`, `/stop`) y `/demo/restore` |
 | WebSocket | `/ws` → `/topic/tenants/{tenantId}/events` | JWT en el CONNECT | tiempo real |
 
 ## WhatsApp Cloud API (opcional)
