@@ -7,7 +7,9 @@ import com.unicanal.conversation.dto.AssignRequest;
 import com.unicanal.conversation.dto.ChangeStatusRequest;
 import com.unicanal.conversation.dto.ConversationResponse;
 import com.unicanal.conversation.dto.MessageResponse;
+import com.unicanal.conversation.dto.SaleRequest;
 import com.unicanal.conversation.dto.SendMessageRequest;
+import org.springframework.web.bind.annotation.PatchMapping;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -43,9 +45,16 @@ public class ConversationController {
             @RequestParam(required = false) ConversationStatus status,
             @RequestParam(required = false) ChannelType channel,
             @RequestParam(required = false) String assignee,
+            @RequestParam(defaultValue = "false") boolean unanswered,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return conversationService.list(principal, status, channel, assignee, page, size);
+        return conversationService.list(principal, status, channel, assignee, unanswered, page, size);
+    }
+
+    @PatchMapping("/{id}/sale")
+    public ConversationResponse markSale(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable String id,
+            @Valid @RequestBody SaleRequest request) {
+        return conversationService.markSale(principal.tenantId(), id, request.isSale(), request.saleAmount());
     }
 
     @GetMapping("/{id}")

@@ -99,6 +99,25 @@ descripción más general de este documento.
     `SimulatedChannelAdapter` para poder demostrar el flujo. En cualquier otro perfil, enviar por un
     canal no disponible falla con `501 CHANNEL_NOT_AVAILABLE` y un mensaje claro, sin guardar el
     mensaje y sin pasar nunca por el simulado.
+11. **Permisos de asignación.** El OWNER asigna un chat a cualquier usuario activo de su empresa o
+    lo deja sin asignar. Un AGENT solo puede asignarse un chat sin asignar o quitarse uno propio;
+    cualquier otra cosa responde 403. Las dos operaciones del AGENT son actualizaciones condicionales
+    atómicas: si dos agentes toman el mismo chat a la vez, solo uno lo consigue.
+12. **El OWNER también es asignable.** En microempresas el dueño también atiende: puede asignarse
+    chats y aparece en `GET /api/users/assignable` (usuarios activos de la empresa). La asignación
+    automática por turnos de los chats nuevos reparte solo entre los AGENT activos.
+13. **Un envío FAILED no cuenta como respuesta.** Al responder se guarda el mensaje OUTBOUND como
+    PENDING antes de llamar al canal; luego queda SENT con su `externalId`, o FAILED con
+    `failureReason` (visible para el agente). Solo un envío exitoso fija `firstResponseAt` y
+    `lastOutboundAt` y pasa la conversación de NEW a IN_PROGRESS, cada cosa con una actualización
+    condicional atómica. Por eso un chat con la respuesta fallida sigue apareciendo en el filtro
+    `unanswered`.
+14. **Reabrir con otra conversación abierta responde 409.** Si el cliente volvió a escribir
+    después de resolver un chat, ya tiene una conversación abierta nueva en ese canal; reabrir la
+    antigua choca con el índice único parcial y responde 409 `ANOTHER_CONVERSATION_OPEN` con un
+    mensaje que indica continuar en la conversación abierta.
+15. **Respuestas rápidas.** Todos los usuarios de la empresa las leen y usan; solo el OWNER las
+    crea, edita y borra (403 para un AGENT).
 
 ### Supuestos aceptados
 - Paquete base `com.unicanal`; backend en el puerto 8090 y frontend en el 5173 con proxy a

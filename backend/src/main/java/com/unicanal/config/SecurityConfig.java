@@ -1,9 +1,8 @@
 package com.unicanal.config;
 
 import com.unicanal.auth.JwtAuthFilter;
-import com.unicanal.auth.JwtService;
+import com.unicanal.auth.PrincipalResolver;
 import com.unicanal.common.ErrorResponse;
-import com.unicanal.user.UserRepository;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,7 +25,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService, UserRepository userRepository,
+    SecurityFilterChain securityFilterChain(HttpSecurity http, PrincipalResolver principalResolver,
             JsonMapper jsonMapper) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
@@ -37,12 +36,15 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
                         // Webhooks de canales: sin JWT (Meta no lo envía); se autentican por firma.
                         .requestMatchers("/api/webhooks/**").permitAll()
+                        // WebSocket: el handshake HTTP no lleva JWT (los navegadores no pueden enviar cabeceras);
+                        // la autenticación se hace en el frame STOMP CONNECT (ver StompAuthInterceptor).
+                        .requestMatchers("/ws", "/ws/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling
                         .authenticationEntryPoint(authenticationEntryPoint(jsonMapper))
                         .accessDeniedHandler(accessDeniedHandler(jsonMapper)))
-                .addFilterBefore(new JwtAuthFilter(jwtService, userRepository),
+                .addFilterBefore(new JwtAuthFilter(principalResolver),
                         UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

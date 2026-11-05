@@ -336,6 +336,88 @@ class ConversationManagementIntegrationTest {
     }
 
     @Test
+    void theUnansweredFilterShowsOpenChatsWhoseLastCustomerMessageHasNoReplyAfterIt() throws Exception {
+        Session owner = support.newCompany();
+        String neverAnswered = support.inbound(owner, ChannelType.SIMULATED);
+        String answered = support.inbound(owner, ChannelType.SIMULATED);
+        support.reply(owner, answered, "listo").andExpect(status().isCreated());
+        String customerWroteAgain = support.inbound(owner, ChannelType.SIMULATED, "insistente", Instant.now());
+        support.reply(owner, customerWroteAgain, "te respondo").andExpect(status().isCreated());
+        support.inbound(owner, ChannelType.SIMULATED, "insistente", Instant.now().plusSeconds(2));
+        String resolvedWithoutReply = support.inbound(owner, ChannelType.SIMULATED);
+        support.changeStatus(owner, resolvedWithoutReply, "RESOLVED").andExpect(status().isOk());
+        String failedReply = support.inbound(owner, ChannelType.WHATSAPP); // el envío falla (localhost:9)
+        support.reply(owner, failedReply, "no llega").andExpect(jsonPath("$.deliveryStatus").value("FAILED"));
+        support.inbound(support.newCompany(), ChannelType.SIMULATED); // otra empresa
+
+        String body = support.getAs(owner, "/api/conversations?unanswered=true&size=50")
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        List<String> ids = JsonPath.read(body, "$.items[*].id");
+        assertThat(ids).containsExactlyInAnyOrder(neverAnswered, customerWroteAgain, failedReply);
+        support.getAs(owner, "/api/conversations?unanswered=true&channel=WHATSAPP")
+                .andExpect(jsonPath("$.totalItems").value(1));
+    }
+
+    @Test
+    void aConversationCanBeMarkedAsSaleWithAValidAmount() throws Exception {
+        Session owner = support.newCompany();
+        Session ana = support.newAgent(owner, "Ana");
+        String id = support.inbound(owner, ChannelType.SIMULATED);
+        String url = "/api/conversations/" + id + "/sale";
+
+        support.mockPatch(ana, url, "{\"isSale\":true,\"saleAmount\":150.50}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSale").value(true))
+                .andExpect(jsonPath("$.saleAmount").value(150.5));
+        org.bson.Document raw = mongoTemplate.getCollection("conversations")
+                .find(new org.bson.Document("_id", id)).first();
+        assertThat(raw).containsEntry("isSale", true);
+        assertThat(raw.get("saleAmount")).isInstanceOf(org.bson.types.Decimal128.class);
+
+        support.mockPatch(ana, url, "{\"isSale\":true,\"saleAmount\":0}").andExpect(status().isOk());
+        support.mockPatch(ana, url, "{\"isSale\":false,\"saleAmount\":99}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.isSale").value(false))
+                .andExpect(jsonPath("$.saleAmount").doesNotExist());
+    }
+
+    @Test
+    void saleValidationRequiresTheFlagAndANonNegativeAmountWhenItIsASale() throws Exception {
+        Session owner = support.newCompany();
+        String id = support.inbound(owner, ChannelType.SIMULATED);
+        String url = "/api/conversations/" + id + "/sale";
+
+        support.mockPatch(owner, url, "{\"isSale\":true}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.saleAmount").value("El monto es obligatorio cuando hay venta"));
+        support.mockPatch(owner, url, "{\"isSale\":true,\"saleAmount\":-1}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.saleAmount").value("El monto no puede ser negativo"));
+        support.mockPatch(owner, url, "{\"saleAmount\":10}").andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors.isSale").exists());
+        assertThat(conversations.findById(id).orElseThrow().isSale()).isFalse();
+        support.mockPatch(support.newCompany(), url, "{\"isSale\":true,\"saleAmount\":5}")
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void assignableUsersAreTheActiveUsersOfTheCompanyIncludingTheOwner() throws Exception {
+        Session owner = support.newCompany();
+        Session ana = support.newAgent(owner, "Ana");
+        Session luis = support.newAgent(owner, "Luis");
+        support.newAgent(support.newCompany(), "Ajeno");
+        agentService.deactivate(owner.tenantId(), luis.userId());
+
+        String body = support.getAs(ana, "/api/users/assignable")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].email").doesNotExist())
+                .andReturn().getResponse().getContentAsString();
+        List<String> ids = JsonPath.read(body, "$[*].id");
+        List<String> roles = JsonPath.read(body, "$[*].role");
+        assertThat(ids).containsExactlyInAnyOrder(owner.userId(), ana.userId());
+        assertThat(roles).containsExactlyInAnyOrder("OWNER", "AGENT");
+    }
+
+    @Test
     void markingAsReadResetsTheUnreadCounter() throws Exception {
         Session owner = support.newCompany();
         String id = support.inbound(owner, ChannelType.SIMULATED, "lector", Instant.now());

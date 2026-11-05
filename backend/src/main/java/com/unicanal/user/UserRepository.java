@@ -16,4 +16,7 @@ public interface UserRepository extends MongoRepository<User, String> {
 
     /** Agentes activos en orden de alta: base estable para la asignación por turnos. */
     List<User> findByTenantIdAndRoleAndActiveTrueOrderByCreatedAtAsc(String tenantId, Role role);
+
+    /** Usuarios activos de la empresa (OWNER incluido): a quiénes se puede asignar un chat. */
+    List<User> findByTenantIdAndActiveTrueOrderByNameAsc(String tenantId);
 }

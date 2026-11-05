@@ -29,6 +29,11 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 .body(ErrorResponse.of(ex.getStatus(), ex.getCode(), ex.getMessage()));
     }
 
+    @ExceptionHandler(FieldValidationException.class)
+    ResponseEntity<ErrorResponse> handleFieldValidation(FieldValidationException ex) {
+        return ResponseEntity.badRequest().body(ErrorResponse.validation(Map.of(ex.getField(), ex.getMessage())));
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     ResponseEntity<ErrorResponse> handleAccessDenied(AccessDeniedException ex) {
         return ResponseEntity.status(HttpStatus.FORBIDDEN)

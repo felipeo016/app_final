@@ -109,8 +109,8 @@ public class ReplyService {
                     conversation.getChannel(), conversationId, reason, e instanceof ApiException ? null : e);
             result = markFailed(pending, reason);
         }
+        // Una sola notificación, después de TODAS las escrituras: lleva el mensaje y la conversación final.
         events.publishEvent(new MessageSentEvent(tenantId, conversationId, result.getId(), result.getDeliveryStatus()));
-        events.publishEvent(new ConversationUpdatedEvent(tenantId, conversationId));
         return MessageResponse.from(result);
     }
 

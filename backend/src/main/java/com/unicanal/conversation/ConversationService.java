@@ -3,6 +3,10 @@ package com.unicanal.conversation;
 import com.unicanal.channel.ChannelType;
 import com.unicanal.common.ApiException;
 import com.unicanal.common.AuthPrincipal;
+import com.unicanal.common.FieldValidationException;
+import java.math.BigDecimal;
+import org.bson.types.Decimal128;
+import org.springframework.data.mongodb.core.aggregation.ComparisonOperators;
 import com.unicanal.common.PageResponse;
 import com.unicanal.conversation.dto.ConversationResponse;
 import com.unicanal.conversation.dto.MessageResponse;
@@ -51,6 +55,16 @@ public class ConversationService {
      */
     public PageResponse<ConversationResponse> list(AuthPrincipal principal, ConversationStatus status,
             ChannelType channel, String assignee, int page, int size) {
+        return list(principal, status, channel, assignee, false, page, size);
+    }
+
+    /**
+     * @param unanswered solo las que esperan respuesta: no resueltas, con mensaje del cliente y sin respuesta
+     *                   enviada después (lastInboundAt posterior a lastOutboundAt, o sin lastOutboundAt). Los
+     *                   envíos FAILED no fijan lastOutboundAt, así que no cuentan como respuesta.
+     */
+    public PageResponse<ConversationResponse> list(AuthPrincipal principal, ConversationStatus status,
+            ChannelType channel, String assignee, boolean unanswered, int page, int size) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
         Criteria criteria = Criteria.where("tenantId").is(principal.tenantId());
@@ -66,6 +80,13 @@ public class ConversationService {
                 case "unassigned" -> criteria.and("assignedTo").is(null);
                 default -> criteria.and("assignedTo").is(assignee);
             }
+        }
+        if (unanswered) {
+            // open == (status != RESOLVED). En BSON un campo ausente es menor que cualquier fecha, así que
+            // $gt también cubre "nunca se respondió".
+            criteria.and("open").is(true).and("lastInboundAt").ne(null)
+                    .andOperator(Criteria.expr(ComparisonOperators.valueOf("lastInboundAt")
+                            .greaterThan("lastOutboundAt")));
         }
         Query query = Query.query(criteria);
         long total = mongoTemplate.count(query, Conversation.class);
@@ -111,6 +132,20 @@ public class ConversationService {
                     "No se puede reabrir: este cliente ya tiene otra conversación abierta por "
                             + conversation.getChannel() + ". Continúa la atención en esa conversación.");
         }
+        events.publishEvent(new ConversationUpdatedEvent(tenantId, conversationId));
+        return get(tenantId, conversationId);
+    }
+
+    /** Marca o desmarca la venta. Con {@code isSale = false} el monto se borra. */
+    public ConversationResponse markSale(String tenantId, String conversationId, boolean isSale,
+            BigDecimal saleAmount) {
+        if (isSale && saleAmount == null) {
+            throw new FieldValidationException("saleAmount", "El monto es obligatorio cuando hay venta");
+        }
+        find(tenantId, conversationId);
+        Update update = Update.update("isSale", isSale)
+                .set("saleAmount", isSale ? new Decimal128(saleAmount) : null);
+        mongoTemplate.updateFirst(byId(tenantId, conversationId), update, Conversation.class);
         events.publishEvent(new ConversationUpdatedEvent(tenantId, conversationId));
         return get(tenantId, conversationId);
     }
