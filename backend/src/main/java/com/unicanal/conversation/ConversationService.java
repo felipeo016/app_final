@@ -124,7 +124,9 @@ public class ConversationService {
      */
     public ConversationResponse changeStatus(String tenantId, String conversationId, ConversationStatus status) {
         Conversation conversation = find(tenantId, conversationId);
-        Update update = Update.update("status", status).set("open", status != ConversationStatus.RESOLVED);
+        Update update = status == ConversationStatus.RESOLVED
+                ? RiskAlertService.clearRisk().set("status", status).set("open", false)
+                : Update.update("status", status).set("open", true);
         try {
             mongoTemplate.updateFirst(byId(tenantId, conversationId), update, Conversation.class);
         } catch (DuplicateKeyException e) {

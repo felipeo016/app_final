@@ -59,7 +59,7 @@ public class ConversationViews {
                             : new UserRef(conversation.getAssignedTo(), assignee != null ? assignee.getName() : null),
                     conversation.getLastMessagePreview(), conversation.getLastMessageAt(), lastInbound,
                     conversation.getLastOutboundAt(), conversation.getFirstResponseAt(),
-                    conversation.getUnreadCount(), conversation.isAtRisk(),
+                    conversation.getUnreadCount(), conversation.isAtRisk(), conversation.getAtRiskSince(),
                     !whatsapp || WindowPolicy.isOpen(lastInbound, now),
                     whatsapp && lastInbound != null ? lastInbound.plus(WindowPolicy.WINDOW) : null,
                     conversation.isSale(), conversation.getSaleAmount(), conversation.getTags(),

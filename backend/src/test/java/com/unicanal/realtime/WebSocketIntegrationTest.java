@@ -4,9 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.jayway.jsonpath.JsonPath;
 import com.unicanal.Fixtures;
+import com.unicanal.MutableClock;
+import com.unicanal.MutableClockConfig;
 import com.unicanal.TestcontainersConfig;
 import com.unicanal.auth.AuthService;
 import com.unicanal.auth.JwtService;
+import com.unicanal.auth.JwtTestTokens;
+import com.unicanal.config.AppProperties;
 import com.unicanal.auth.dto.AuthResponse;
 import com.unicanal.auth.dto.LoginRequest;
 import com.unicanal.auth.dto.RegisterRequest;
@@ -60,7 +64,7 @@ import org.springframework.web.socket.messaging.WebSocketStompClient;
  * los eventos y cierre de la sesión de un agente desactivado.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@Import(TestcontainersConfig.class)
+@Import({TestcontainersConfig.class, MutableClockConfig.class})
 class WebSocketIntegrationTest {
 
     private static final long TIMEOUT_SECONDS = 10;
@@ -87,10 +91,18 @@ class WebSocketIntegrationTest {
     @Autowired
     private MessageRepository messages;
 
+    @Autowired
+    private WebSocketSessionRegistry sessionRegistry;
+    @Autowired
+    private AppProperties appProperties;
+    @Autowired
+    private MutableClock clock;
+
     private final List<StompSession> opened = new ArrayList<>();
 
     @AfterEach
     void disconnectAll() {
+        clock.reset();
         opened.stream().filter(StompSession::isConnected).forEach(StompSession::disconnect);
     }
 
@@ -383,6 +395,42 @@ class WebSocketIntegrationTest {
         String resolved = awaitEvent(events, ofType("CONVERSATION_UPDATED", conversationId));
         assertThat((String) JsonPath.read(resolved, "$.conversation.status")).isEqualTo("RESOLVED");
         assertThat((Boolean) JsonPath.read(resolved, "$.conversation.open")).isFalse();
+    }
+
+    // --- vencimiento del token ---
+
+    @Test
+    void theSessionIsClosedWhenTheJwtItConnectedWithExpires() throws Exception {
+        AuthResponse auth = authService.register(new RegisterRequest("Empresa " + UUID.randomUUID(), "Dueña",
+                "ws-exp-" + UUID.randomUUID() + "@test.com", PASSWORD));
+        Account owner = new Account(auth.token(),
+                new AuthPrincipal(auth.user().id(), auth.tenant().id(), Role.OWNER));
+        // Otra sesión con un token que vence mucho más tarde (mismo secreto, otra duración)
+        Account other = newCompany();
+        User otherUser = Fixtures.user(other.principal().userId(), other.tenantId(), Role.OWNER, "x@test.com", "h");
+        String longLived = JwtTestTokens.issue(appProperties, 600, otherUser).value();
+        Connection expiring = connect(owner);
+        Connection fresh = connect("Bearer " + longLived, new Recorder());
+        assertThat(fresh).isNotNull();
+
+        // Un segundo antes del vencimiento sigue abierta
+        clock.set(auth.expiresAt().minusSeconds(1));
+        sessionRegistry.closeExpiredSessions();
+        assertThat(expiring.session().isConnected()).isTrue();
+
+        // Al vencer, la tarea periódica la cierra; la de un token vigente no se toca
+        clock.set(auth.expiresAt());
+        sessionRegistry.closeExpiredSessions();
+        awaitDisconnected(expiring);
+        assertThat(fresh.session().isConnected()).isTrue();
+    }
+
+    private static void awaitDisconnected(Connection connection) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TIMEOUT_SECONDS);
+        while (connection.session().isConnected() && System.nanoTime() < deadline) {
+            TimeUnit.MILLISECONDS.sleep(50);
+        }
+        assertThat(connection.session().isConnected()).as("sesión cerrada").isFalse();
     }
 
     // --- desactivación ---

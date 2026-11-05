@@ -45,8 +45,12 @@ public class Conversation {
     @Field(targetType = FieldType.DECIMAL128)
     private BigDecimal saleAmount;
     private List<String> tags = new ArrayList<>();
-    /** Lo gestiona la alerta "cero mensajes perdidos" (Paso 7). */
+    /** Alerta "cero mensajes perdidos": el cliente espera respuesta hace más de riskAlertMinutes. */
     private boolean atRisk;
+    /** Cuándo se marcó en riesgo; nulo si no lo está. */
+    private Instant atRiskSince;
+    /** Pasada de la alerta que la marcó: permite saber qué conversaciones cambió una actualización masiva. */
+    private String atRiskRunId;
     private Instant createdAt;
 
     protected Conversation() {
@@ -178,6 +182,10 @@ public class Conversation {
 
     public void setAtRisk(boolean atRisk) {
         this.atRisk = atRisk;
+    }
+
+    public Instant getAtRiskSince() {
+        return atRiskSince;
     }
 
     public Instant getCreatedAt() {

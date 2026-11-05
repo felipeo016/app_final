@@ -1,5 +1,6 @@
 package com.unicanal.auth;
 
+import com.unicanal.auth.JwtService.VerifiedToken;
 import com.unicanal.common.AuthPrincipal;
 import com.unicanal.user.User;
 import com.unicanal.user.UserRepository;
@@ -24,12 +25,19 @@ public class PrincipalResolver {
     }
 
     public Optional<AuthPrincipal> resolve(String token) {
+        return resolveWithExpiry(token).map(VerifiedToken::principal);
+    }
+
+    /** Igual que {@link #resolve}, conservando el vencimiento del token. */
+    public Optional<VerifiedToken> resolveWithExpiry(String token) {
         if (token == null || token.isBlank()) {
             return Optional.empty();
         }
-        return jwtService.parse(token.trim()).flatMap(fromToken -> userRepository.findById(fromToken.userId())
+        return jwtService.verify(token.trim()).flatMap(verified -> userRepository
+                .findById(verified.principal().userId())
                 .filter(User::isActive)
-                .filter(user -> user.getTenantId().equals(fromToken.tenantId()))
-                .map(user -> new AuthPrincipal(user.getId(), user.getTenantId(), user.getRole())));
+                .filter(user -> user.getTenantId().equals(verified.principal().tenantId()))
+                .map(user -> new VerifiedToken(new AuthPrincipal(user.getId(), user.getTenantId(), user.getRole()),
+                        verified.expiresAt())));
     }
 }

@@ -165,6 +165,10 @@ public class ReplyService {
                 Update.update("status", ConversationStatus.IN_PROGRESS), Conversation.class);
         mongoTemplate.updateFirst(ConversationService.byId(tenantId, conversationId),
                 new Update().max("lastOutboundAt", timestamp), Conversation.class);
+        // Después de fijar lastOutboundAt: si la alerta la marcó justo antes, aquí se limpia; si corre
+        // después, ya no la ve pendiente de respuesta.
+        mongoTemplate.updateFirst(ConversationService.byId(tenantId, conversationId),
+                RiskAlertService.clearRisk(), Conversation.class);
     }
 
     private Message markSent(Message pending, SendResult sent) {

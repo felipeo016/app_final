@@ -14,7 +14,7 @@ import java.util.List;
  */
 public record ConversationResponse(String id, ContactRef contact, ChannelType channel, ConversationStatus status,
         boolean open, UserRef assignedTo, String lastMessagePreview, Instant lastMessageAt, Instant lastInboundAt,
-        Instant lastOutboundAt, Instant firstResponseAt, int unreadCount, boolean atRisk, boolean replyWindowOpen,
+        Instant lastOutboundAt, Instant firstResponseAt, int unreadCount, boolean atRisk, Instant atRiskSince, boolean replyWindowOpen,
         Instant replyWindowExpiresAt, @JsonProperty("isSale") boolean isSale, BigDecimal saleAmount, List<String> tags, Instant createdAt) {
 
     public record ContactRef(String id, String name) {

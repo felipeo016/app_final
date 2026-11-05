@@ -1,5 +1,6 @@
 package com.unicanal.realtime;
 
+import com.unicanal.auth.JwtService.VerifiedToken;
 import com.unicanal.auth.PrincipalResolver;
 import com.unicanal.common.AuthPrincipal;
 import com.unicanal.user.User;
@@ -65,12 +66,14 @@ public class StompAuthInterceptor implements ChannelInterceptor {
         String header = accessor.getFirstNativeHeader("Authorization");
         String token = header != null && header.startsWith(BEARER_PREFIX) ? header.substring(BEARER_PREFIX.length())
                 : null;
-        AuthPrincipal principal = principalResolver.resolve(token).orElseThrow(() -> {
+        VerifiedToken verified = principalResolver.resolveWithExpiry(token).orElseThrow(() -> {
             log.warn("CONNECT WebSocket rechazado: token ausente, inválido o usuario inactivo");
             return reject("No autorizado: inicia sesión de nuevo");
         });
+        AuthPrincipal principal = verified.principal();
         accessor.setUser(new StompPrincipal(principal));
-        sessions.bind(accessor.getSessionId(), principal.userId());
+        // La sesión vive como mucho lo que el token: al vencer se cierra (ver WebSocketSessionRegistry)
+        sessions.bind(accessor.getSessionId(), principal.userId(), verified.expiresAt());
     }
 
     private void authorizeSubscription(StompHeaderAccessor accessor) {

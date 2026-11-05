@@ -118,6 +118,32 @@ descripción más general de este documento.
     mensaje que indica continuar en la conversación abierta.
 15. **Respuestas rápidas.** Todos los usuarios de la empresa las leen y usan; solo el OWNER las
     crea, edita y borra (403 para un AGENT).
+16. **WebSocket: un tópico por empresa.** STOMP sobre WebSocket nativo en `/ws`. El JWT va en la
+    cabecera `Authorization: Bearer <jwt>` del frame CONNECT (el handshake HTTP es público). Cada
+    empresa tiene un único tópico, `/topic/tenants/{tenantId}/events`, y solo se permite SUBSCRIBE a
+    ese destino exacto del propio tenant (validación de la decisión 6).
+17. **Tres tipos de evento, siempre con la conversación completa.** Payload común:
+    `{ type, conversationId, conversation, message?, occurredAt }`, donde `conversation` es la misma
+    `ConversationResponse` de la API (vista previa, estado, `open`, asignado, no leídos, `atRisk`,
+    ventana de 24 h, venta) releída de MongoDB después de la escritura, para que la bandeja se
+    actualice sin otra petición.
+    - `MESSAGE_CREATED`: mensaje nuevo (del cliente, respuesta de un agente o nota interna); trae
+      `message` con su `deliveryStatus` final (SENT o FAILED con `failureReason`, nunca PENDING).
+    - `CONVERSATION_UPDATED`: cambio de estado, leído, venta o alerta de riesgo; si se debe a un
+      `status` de entrega del canal, trae el `message` afectado con su nuevo `deliveryStatus`.
+    - `ASSIGNED`: cambió el agente asignado (`conversation.assignedTo` nulo = sin asignar).
+    Los eventos se publican solo después de completar la escritura en MongoDB y se entregan en el
+    orden en que se publicaron (`setPreservePublishOrder`).
+18. **El cliente no publica.** Todo frame SEND del cliente se rechaza con ERROR: los clientes solo
+    escuchan. Si pudieran publicar en `/topic` podrían enviar eventos falsos a sus compañeros.
+19. **Cierre de sesiones.** El servidor cierra la sesión WebSocket (código 1008, política) cuando:
+    - se desactiva al agente: de inmediato, antes de difundir la reasignación de sus chats;
+    - vence el JWT con el que se conectó: una tarea periódica (`app.websocket.expiry-check-ms`,
+      15 s por defecto) cierra las sesiones vencidas y el cliente debe volver a iniciar sesión.
+20. **Limitación: un solo nodo.** El broker STOMP es el simple en memoria de Spring y el registro de
+    sesiones también vive en memoria: solo funciona con UNA instancia del backend. Para escalar
+    horizontalmente hay que pasar a un broker externo (RabbitMQ/ActiveMQ con relay STOMP, o
+    Redis pub/sub) y propagar entre nodos los cierres por desactivación.
 
 ### Supuestos aceptados
 - Paquete base `com.unicanal`; backend en el puerto 8090 y frontend en el 5173 con proxy a

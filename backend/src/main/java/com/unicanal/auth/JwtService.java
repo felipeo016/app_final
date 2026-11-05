@@ -72,19 +72,28 @@ public class JwtService {
 
     /** Devuelve la identidad del token, o vacío si es inválido, está vencido o mal firmado. */
     public Optional<AuthPrincipal> parse(String token) {
+        return verify(token).map(VerifiedToken::principal);
+    }
+
+    /** Como {@link #parse} pero también devuelve el vencimiento (el WebSocket cierra la sesión al llegar). */
+    public Optional<VerifiedToken> verify(String token) {
         try {
             Jwt jwt = decoder.decode(token);
             String tenantId = jwt.getClaimAsString(CLAIM_TENANT_ID);
             String role = jwt.getClaimAsString(CLAIM_ROLE);
-            if (jwt.getSubject() == null || tenantId == null || role == null) {
+            if (jwt.getSubject() == null || tenantId == null || role == null || jwt.getExpiresAt() == null) {
                 return Optional.empty();
             }
-            return Optional.of(new AuthPrincipal(jwt.getSubject(), tenantId, Role.valueOf(role)));
+            return Optional.of(new VerifiedToken(new AuthPrincipal(jwt.getSubject(), tenantId, Role.valueOf(role)),
+                    jwt.getExpiresAt()));
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }
     }
 
     public record IssuedToken(String value, Instant expiresAt) {
+    }
+
+    public record VerifiedToken(AuthPrincipal principal, Instant expiresAt) {
     }
 }

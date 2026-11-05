@@ -17,6 +17,10 @@ server:
   port: ${SERVER_PORT:8090}
 
 app:
+  # Tareas periódicas (cierre de WebSocket vencidos, alerta de chats en riesgo). Activas siempre;
+  # solo las pruebas las desactivan para invocarlas a mano con un reloj controlado.
+  scheduling:
+    enabled: ${SCHEDULING_ENABLED:true}
   jwt:
     # Sin valor por defecto: el secreto solo viene del entorno (mínimo 32 caracteres).
     secret: ${JWT_SECRET:}
@@ -33,6 +37,11 @@ app:
   # Orígenes permitidos para el WebSocket (/ws), separados por coma.
   websocket:
     allowed-origins: ${WEBSOCKET_ALLOWED_ORIGINS:http://localhost:5173}
+    # Cada cuánto se cierran las sesiones cuyo JWT ya venció
+    expiry-check-ms: 15000
+  # Alerta "cero mensajes perdidos": cada cuánto se buscan chats sin respuesta (los minutos son por empresa)
+  risk-alert:
+    check-ms: 60000
 
 management:
   endpoints:
