@@ -23,6 +23,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class DeliveryStatusUpdater {
 
+    public static final String CHANNEL_REPORTED_FAILURE = "El canal informó que no pudo entregar el mensaje";
+
     private static final Logger log = LoggerFactory.getLogger(DeliveryStatusUpdater.class);
 
     private final MongoTemplate mongoTemplate;
@@ -47,7 +49,12 @@ public class DeliveryStatusUpdater {
                 .and("direction").is(Direction.OUTBOUND)
                 .andOperator(current));
 
-        Message changed = mongoTemplate.findAndModify(query, Update.update("deliveryStatus", update.status()),
+        Update change = Update.update("deliveryStatus", update.status());
+        if (update.status() == DeliveryStatus.FAILED) {
+            // El agente siempre ve un motivo junto al FAILED (el webhook no trae uno apto para mostrar)
+            change.set("failureReason", CHANNEL_REPORTED_FAILURE).set("failureCode", "CHANNEL_REPORTED_FAILURE");
+        }
+        Message changed = mongoTemplate.findAndModify(query, change,
                 FindAndModifyOptions.options().returnNew(true), Message.class);
         if (changed == null) {
             // Mensaje desconocido (p. ej. el estado llegó antes de guardar el id externo) o estado que no avanza.

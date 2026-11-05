@@ -235,6 +235,111 @@ class ReplyIntegrationTest {
         assertThat(facebook.statusSeenWhenCalled).containsExactly(DeliveryStatus.PENDING);
     }
 
+    // --- reintento de un envío fallido ---
+
+    private String retryUrl(String conversationId, String messageId) {
+        return "/api/conversations/" + conversationId + "/messages/" + messageId + "/retry";
+    }
+
+    @Test
+    void aFailedMessageIsRetriedOnTheSameMessageWithoutDuplicatingIt() throws Exception {
+        Session owner = support.newCompany();
+        String id = support.inbound(owner, ChannelType.FACEBOOK);
+        facebook.failure = new IllegalStateException("caída temporal");
+        String failed = support.reply(owner, id, "¿Te sirve el martes?")
+                .andExpect(jsonPath("$.deliveryStatus").value("FAILED"))
+                .andReturn().getResponse().getContentAsString();
+        String messageId = com.jayway.jsonpath.JsonPath.read(failed, "$.id");
+        facebook.failure = null;
+        facebook.statusSeenWhenCalled.clear();
+
+        support.postAs(owner, retryUrl(id, messageId), "")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(messageId))
+                .andExpect(jsonPath("$.deliveryStatus").value("SENT"))
+                .andExpect(jsonPath("$.failureReason").doesNotExist());
+
+        // Volvió a PENDING antes de llamar al canal, igual que un envío nuevo
+        assertThat(facebook.statusSeenWhenCalled).containsExactly(DeliveryStatus.PENDING);
+        assertThat(outbound(owner, id)).singleElement().satisfies(m -> {
+            assertThat(m.getDeliveryStatus()).isEqualTo(DeliveryStatus.SENT);
+            assertThat(m.getExternalId()).startsWith("fb-");
+        });
+        Conversation conversation = conversation(id);
+        assertThat(conversation.getStatus()).isEqualTo(ConversationStatus.IN_PROGRESS);
+        assertThat(conversation.getFirstResponseAt()).isNotNull();
+
+        // Un mensaje que ya salió no se puede reintentar
+        support.postAs(owner, retryUrl(id, messageId), "").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("MESSAGE_NOT_RETRYABLE"));
+    }
+
+    @Test
+    void aRetryThatFailsAgainStaysFailedWithItsReason() throws Exception {
+        Session owner = support.newCompany();
+        String id = support.inbound(owner, ChannelType.WHATSAPP); // localhost:9: siempre falla
+        String failed = support.reply(owner, id, "hola").andReturn().getResponse().getContentAsString();
+        String messageId = com.jayway.jsonpath.JsonPath.read(failed, "$.id");
+
+        support.postAs(owner, retryUrl(id, messageId), "").andExpect(status().isOk())
+                .andExpect(jsonPath("$.deliveryStatus").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason").value("No se pudo enviar el mensaje por WhatsApp"));
+        assertThat(conversation(id).getFirstResponseAt()).isNull();
+    }
+
+    @Test
+    void aSendWithoutConfirmationFromTheChannelKeepsAClearReasonAndCode() throws Exception {
+        Session owner = support.newCompany();
+        String id = support.inbound(owner, ChannelType.FACEBOOK);
+
+        // El adaptador lo informa explícitamente…
+        facebook.failure = com.unicanal.channel.ChannelSendErrors.unconfirmed();
+        String first = support.reply(owner, id, "uno").andExpect(status().isCreated())
+                .andExpect(jsonPath("$.deliveryStatus").value("FAILED"))
+                .andExpect(jsonPath("$.failureReason")
+                        .value("No se pudo confirmar el envío; puede que el cliente sí lo haya recibido"))
+                .andExpect(jsonPath("$.failureCode").value("CHANNEL_SEND_UNCONFIRMED"))
+                .andReturn().getResponse().getContentAsString();
+        // …o deja escapar un timeout de red: se trata igual
+        facebook.failure = new java.io.UncheckedIOException(new java.net.SocketTimeoutException("Read timed out"));
+        support.reply(owner, id, "dos")
+                .andExpect(jsonPath("$.failureCode").value("CHANNEL_SEND_UNCONFIRMED"));
+        // Un error inesperado que no es de red NO dice que el cliente pudo recibirlo
+        facebook.failure = new IllegalStateException("bug");
+        support.reply(owner, id, "tres")
+                .andExpect(jsonPath("$.failureCode").value("CHANNEL_UNEXPECTED_ERROR"))
+                .andExpect(jsonPath("$.failureReason").value("Error inesperado del canal al enviar el mensaje"));
+
+        // Al reintentar con éxito se borran el motivo y el código
+        facebook.failure = null;
+        String messageId = com.jayway.jsonpath.JsonPath.read(first, "$.id");
+        support.postAs(owner, retryUrl(id, messageId), "").andExpect(jsonPath("$.deliveryStatus").value("SENT"))
+                .andExpect(jsonPath("$.failureCode").doesNotExist())
+                .andExpect(jsonPath("$.failureReason").doesNotExist());
+    }
+
+    @Test
+    void retryingNeedsAnOpenConversationAndAFailedMessageOfMyCompany() throws Exception {
+        Session owner = support.newCompany();
+        String id = support.inbound(owner, ChannelType.FACEBOOK);
+        facebook.failure = new IllegalStateException("caída");
+        String messageId = com.jayway.jsonpath.JsonPath.read(
+                support.reply(owner, id, "hola").andReturn().getResponse().getContentAsString(), "$.id");
+        facebook.failure = null;
+
+        support.postAs(support.newCompany(), retryUrl(id, messageId), "").andExpect(status().isNotFound());
+        support.postAs(owner, retryUrl(id, "no-existe"), "").andExpect(status().isNotFound());
+        String inboundId = messages.findByTenantIdAndConversationId(owner.tenantId(), id, PageRequest.of(0, 10))
+                .stream().filter(m -> m.getDirection() == Direction.INBOUND).findFirst().orElseThrow().getId();
+        support.postAs(owner, retryUrl(id, inboundId), "").andExpect(status().isConflict());
+
+        support.changeStatus(owner, id, "RESOLVED").andExpect(status().isOk());
+        support.postAs(owner, retryUrl(id, messageId), "").andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONVERSATION_RESOLVED"));
+        assertThat(outbound(owner, id)).singleElement()
+                .satisfies(m -> assertThat(m.getDeliveryStatus()).isEqualTo(DeliveryStatus.FAILED));
+    }
+
     // --- validaciones previas: no se guarda nada ---
 
     @Test

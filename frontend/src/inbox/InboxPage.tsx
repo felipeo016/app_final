@@ -3,16 +3,12 @@ import { apiFetch } from '../api/http'
 import type { AssignableUser } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import type { Session } from '../auth/session'
+import ConversationView from '../conversation/ConversationView'
+import AppHeader from '../layout/AppHeader'
 import ConversationList from './ConversationList'
 import InboxFiltersBar from './InboxFiltersBar'
 import { DEFAULT_FILTERS, type InboxFilters } from './inboxState'
 import { useInbox } from './useInbox'
-
-const CONNECTION_LABELS = {
-  connecting: 'Conectando…',
-  connected: 'En línea',
-  reconnecting: 'Reconectando…',
-} as const
 
 /** Pantalla principal: bandeja unificada | conversación | perfil del cliente. */
 export default function InboxPage() {
@@ -33,24 +29,9 @@ function Inbox({ session, logout }: { session: Session; logout: (notice?: string
       .catch(() => setUsers([]))
   }, [])
 
-  const selected = inbox.conversations.find((conversation) => conversation.id === selectedId) ?? null
-
   return (
     <div className="app">
-      <header className="app-header">
-        <div className="app-brand">
-          Unicanal <span className="app-tenant">{session.tenant.name}</span>
-        </div>
-        <div className="app-user">
-          <span className={`connection connection-${inbox.connection}`}>{CONNECTION_LABELS[inbox.connection]}</span>
-          <span>
-            {session.user.name} · {session.user.role === 'OWNER' ? 'Dueño' : 'Agente'}
-          </span>
-          <button type="button" className="btn-link" onClick={() => logout()}>
-            Cerrar sesión
-          </button>
-        </div>
-      </header>
+      <AppHeader session={session} onLogout={() => logout()} connection={inbox.connection} />
 
       <main className="columns">
         <section className="column column-inbox" aria-label="Bandeja">
@@ -66,21 +47,26 @@ function Inbox({ session, logout }: { session: Session; logout: (notice?: string
         </section>
 
         <section className="column column-conversation" aria-label="Conversación">
-          <div className="placeholder">
-            {selected ? (
-              <>
-                <h2>{selected.contact.name ?? 'Cliente'}</h2>
-                <p>El historial y la respuesta llegan en el paso 8b.</p>
-              </>
-            ) : (
+          {selectedId ? (
+            <ConversationView
+              // Otro chat = otra instancia: todo su estado (mensajes, errores, borrador) empieza de cero
+              key={selectedId}
+              conversationId={selectedId}
+              currentUserId={session.user.id}
+              users={users}
+              subscribe={inbox.subscribe}
+              connectionSeq={inbox.connectionSeq}
+            />
+          ) : (
+            <div className="placeholder">
               <p>Selecciona una conversación de la bandeja.</p>
-            )}
-          </div>
+            </div>
+          )}
         </section>
 
         <aside className="column column-profile" aria-label="Perfil del cliente">
           <div className="placeholder">
-            <p>{selected ? 'El perfil del cliente llega en el paso 8c.' : 'Perfil del cliente'}</p>
+            <p>{selectedId ? 'El perfil del cliente llega en el paso 8c.' : 'Perfil del cliente'}</p>
           </div>
         </aside>
       </main>

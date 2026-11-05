@@ -5,6 +5,7 @@ import { AuthProvider } from './auth/AuthProvider'
 import InboxPage from './inbox/InboxPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import SimulatorPage from './simulator/SimulatorPage'
 
 function RequireSession({ children }: { children: ReactNode }) {
   const { session } = useAuth()
@@ -23,6 +24,14 @@ export default function App() {
             element={
               <RequireSession>
                 <InboxPage />
+              </RequireSession>
+            }
+          />
+          <Route
+            path="/simulador"
+            element={
+              <RequireSession>
+                <SimulatorPage />
               </RequireSession>
             }
           />

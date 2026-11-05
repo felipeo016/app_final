@@ -68,7 +68,11 @@ export interface Message {
   timestamp: ApiInstant
   deliveryStatus: DeliveryStatus | null
   failureReason: string | null
+  /** CHANNEL_SEND_UNCONFIRMED: el canal no respondió; puede que el cliente sí lo haya recibido. */
+  failureCode?: string | null
 }
+
+export const UNCONFIRMED_SEND = 'CHANNEL_SEND_UNCONFIRMED'
 
 export interface Page<T> {
   items: T[]

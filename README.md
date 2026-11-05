@@ -12,7 +12,7 @@ Monorepo:
 | `frontend/` | React 19 + Vite + TypeScript |
 | `docker-compose.yml` | MongoDB local |
 
-> Estado: Fase 1 (MVP), **Paso 8a – frontend: acceso y bandeja**. Contexto y reglas de arquitectura en
+> Estado: Fase 1 (MVP), **Paso 8b – frontend: conversación y simulador**. Contexto y reglas de arquitectura en
 > [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
 
 ## Requisitos
@@ -121,12 +121,23 @@ Abre http://localhost:5173, registra una empresa en **Regístrala** y entrarás 
 La sesión (JWT) se guarda en `sessionStorage`: dura lo que la pestaña. Si el token vence, el
 backend responde 401 o cierra el WebSocket por sesión vencida, y la app vuelve al login con un aviso.
 
-#### Ver la bandeja en tiempo real (perfil `dev`)
+#### Probar sin canales reales: página "Simulador" (perfil `dev`)
 
-Con el backend arrancado con `SPRING_PROFILES_ACTIVE=dev`, inicia sesión con el correo y la
-contraseña con que registraste la empresa y simula que un cliente escribe. La conversación aparece
-al instante en la bandeja. Para ver la alerta "cero mensajes perdidos" sin esperar 15 minutos, el
-último comando baja el umbral a 1 minuto (la tarea revisa cada 60 s).
+Con el backend arrancado con `SPRING_PROFILES_ACTIVE=dev`, el encabezado muestra **Simulador**
+(fuera de dev no aparece y sus rutas `/api/dev/**` responden 404). Desde ahí puedes:
+
+- hacer que un cliente escriba por cualquier canal, ahora o "en el pasado" (hace 20 min para ver la
+  alerta de riesgo; hace 25 h para ver cerrada la ventana de 24 h de WhatsApp);
+- hacer que el canal informe que una respuesta fue entregada, leída o no se envió;
+- hacer fallar las próximas respuestas de tu empresa para probar el botón **Reintentar**.
+
+Todo llega a la bandeja y al chat abierto en tiempo real.
+
+#### Lo mismo desde la terminal
+
+Inicia sesión con el correo y la contraseña con que registraste la empresa y simula que un cliente
+escribe. La conversación aparece al instante en la bandeja. Para ver la alerta "cero mensajes
+perdidos" sin esperar 15 minutos, el último comando baja el umbral a 1 minuto (la tarea revisa cada 60 s).
 
 **PowerShell (Windows):**
 

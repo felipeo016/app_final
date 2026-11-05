@@ -7,6 +7,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
@@ -131,6 +132,41 @@ class WhatsAppCloudAdapterTest {
                         assertThat(e.getStatus()).isEqualTo(HttpStatus.BAD_GATEWAY);
                         assertThat(e.getCode()).isEqualTo("CHANNEL_SEND_FAILED");
                     });
+        }
+    }
+
+    @Test
+    void aTimeoutOrADroppedConnectionAfterSendingIsUnconfirmedNotFailed() {
+        for (java.io.IOException noAnswer : new java.io.IOException[] {
+                new java.net.SocketTimeoutException("Read timed out"),
+                new java.net.http.HttpTimeoutException("request timed out"),
+                new java.net.SocketException("Connection reset") }) {
+            Fixture f = configured();
+            f.server().expect(requestTo(BASE_URL + "/555000/messages")).andRespond(withException(noAnswer));
+
+            assertThatThrownBy(() -> f.adapter().sendMessage(message(NOW)))
+                    .as(noAnswer.toString())
+                    .isInstanceOfSatisfying(ApiException.class, e -> {
+                        assertThat(e.getCode()).isEqualTo("CHANNEL_SEND_UNCONFIRMED");
+                        assertThat(e.getMessage())
+                                .isEqualTo("No se pudo confirmar el envío; puede que el cliente sí lo haya recibido");
+                    });
+        }
+    }
+
+    @Test
+    void ifTheConnectionNeverOpenedTheMessageSurelyDidNotLeave() {
+        for (java.io.IOException neverConnected : new java.io.IOException[] {
+                new java.net.ConnectException("Connection refused"),
+                new java.net.UnknownHostException("graph.test"),
+                new java.net.http.HttpConnectTimeoutException("connect timed out") }) {
+            Fixture f = configured();
+            f.server().expect(requestTo(BASE_URL + "/555000/messages")).andRespond(withException(neverConnected));
+
+            assertThatThrownBy(() -> f.adapter().sendMessage(message(NOW)))
+                    .as(neverConnected.toString())
+                    .isInstanceOfSatisfying(ApiException.class,
+                            e -> assertThat(e.getCode()).isEqualTo("CHANNEL_SEND_FAILED"));
         }
     }
 

@@ -77,6 +77,13 @@ public class ConversationController {
         return replyService.reply(principal, id, request.text());
     }
 
+    /** Reintenta un envío FAILED sobre el mismo mensaje. 200 con el estado final (SENT o FAILED otra vez). */
+    @PostMapping("/{id}/messages/{messageId}/retry")
+    public MessageResponse retry(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable String id,
+            @PathVariable String messageId) {
+        return replyService.retry(principal, id, messageId);
+    }
+
     @PostMapping("/{id}/notes")
     @ResponseStatus(HttpStatus.CREATED)
     public MessageResponse addNote(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable String id,

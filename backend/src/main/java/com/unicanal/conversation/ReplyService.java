@@ -2,6 +2,7 @@ package com.unicanal.conversation;
 
 import com.unicanal.channel.ChannelAdapter;
 import com.unicanal.channel.ChannelRegistry;
+import com.unicanal.channel.ChannelSendErrors;
 import com.unicanal.channel.ChannelType;
 import com.unicanal.channel.OutboundMessage;
 import com.unicanal.channel.SendResult;
@@ -17,6 +18,7 @@ import com.unicanal.message.Direction;
 import com.unicanal.message.Message;
 import com.unicanal.message.MessageRepository;
 import com.unicanal.message.MessageSentEvent;
+import com.unicanal.message.MessageStatusChangedEvent;
 import com.unicanal.message.MessageType;
 import java.time.Clock;
 import java.time.Instant;
@@ -77,6 +79,57 @@ public class ReplyService {
     public MessageResponse reply(AuthPrincipal principal, String conversationId, String text) {
         String tenantId = principal.tenantId();
         Conversation conversation = conversationService.find(tenantId, conversationId);
+        SendTarget target = validateSendable(tenantId, conversation);
+
+        String body = text.strip();
+        Message pending = messages.save(new Message(tenantId, conversationId, Direction.OUTBOUND, MessageType.TEXT,
+                body, null, principal.userId(), target.now(), DeliveryStatus.PENDING));
+        touchConversation(tenantId, conversationId, target.now(), body);
+
+        Message result = deliver(conversation, target, pending);
+        // Una sola notificación, después de TODAS las escrituras: lleva el mensaje y la conversación final.
+        events.publishEvent(new MessageSentEvent(tenantId, conversationId, result.getId(), result.getDeliveryStatus()));
+        return MessageResponse.from(result);
+    }
+
+    /**
+     * Reintenta un mensaje que quedó FAILED: el MISMO mensaje vuelve a PENDING (no se duplica en el chat) y se
+     * envía otra vez, con las mismas validaciones que una respuesta nueva. Si dos agentes pulsan "Reintentar"
+     * a la vez, solo uno lo consigue (el paso FAILED → PENDING es condicional); el otro recibe 409.
+     */
+    public MessageResponse retry(AuthPrincipal principal, String conversationId, String messageId) {
+        String tenantId = principal.tenantId();
+        Conversation conversation = conversationService.find(tenantId, conversationId);
+        Message failed = messages.findById(messageId)
+                .filter(message -> tenantId.equals(message.getTenantId())
+                        && conversationId.equals(message.getConversationId()))
+                .orElseThrow(() -> ApiException.notFound("MESSAGE_NOT_FOUND", "Mensaje no encontrado"));
+        if (failed.getDirection() != Direction.OUTBOUND || failed.getType() != MessageType.TEXT
+                || failed.getDeliveryStatus() != DeliveryStatus.FAILED) {
+            throw notRetryable();
+        }
+        SendTarget target = validateSendable(tenantId, conversation);
+
+        Message pending = mongoTemplate.findAndModify(
+                Query.query(Criteria.where("_id").is(messageId).and("tenantId").is(tenantId)
+                        .and("deliveryStatus").is(DeliveryStatus.FAILED)),
+                Update.update("deliveryStatus", DeliveryStatus.PENDING).unset("failureReason").unset("failureCode"),
+                FindAndModifyOptions.options().returnNew(true), Message.class);
+        if (pending == null) {
+            throw notRetryable();
+        }
+        Message result = deliver(conversation, target, pending);
+        // El mensaje ya existía: se notifica como cambio de estado de entrega (CONVERSATION_UPDATED con message)
+        events.publishEvent(new MessageStatusChangedEvent(tenantId, conversationId, result.getId(),
+                result.getDeliveryStatus()));
+        return MessageResponse.from(result);
+    }
+
+    private record SendTarget(ChannelAdapter adapter, String recipient, Instant now) {
+    }
+
+    /** Lo que se comprueba antes de guardar o enviar nada. */
+    private SendTarget validateSendable(String tenantId, Conversation conversation) {
         if (!conversation.isOpen()) {
             throw new ApiException(HttpStatus.CONFLICT, "CONVERSATION_RESOLVED",
                     "La conversación está resuelta: reábrela para responder");
@@ -91,27 +144,45 @@ public class ReplyService {
                     "Pasaron más de 24 horas desde el último mensaje del cliente: WhatsApp ya no permite "
                             + "mensajes libres, solo plantillas aprobadas");
         }
+        return new SendTarget(adapter, recipient, now);
+    }
 
-        String body = text.strip();
-        Message pending = messages.save(new Message(tenantId, conversationId, Direction.OUTBOUND, MessageType.TEXT,
-                body, null, principal.userId(), now, DeliveryStatus.PENDING));
-        touchConversation(tenantId, conversationId, now, body);
-
-        Message result;
+    /** Llama al canal con el mensaje ya guardado como PENDING y lo deja SENT o FAILED. */
+    private Message deliver(Conversation conversation, SendTarget target, Message pending) {
+        String tenantId = conversation.getTenantId();
+        String conversationId = conversation.getId();
         try {
-            SendResult sent = adapter.sendMessage(new OutboundMessage(tenantId, conversationId, recipient, body,
-                    conversation.getLastInboundAt()));
-            result = markSent(pending, sent);
-            recordResponse(tenantId, conversationId, now);
+            SendResult sent = target.adapter().sendMessage(new OutboundMessage(tenantId, conversationId,
+                    target.recipient(), pending.getContent(), conversation.getLastInboundAt()));
+            Message result = markSent(pending, sent);
+            recordResponse(tenantId, conversationId, target.now());
+            return result;
         } catch (RuntimeException e) {
-            String reason = e instanceof ApiException ? e.getMessage() : UNEXPECTED_FAILURE;
+            Failure failure = Failure.of(e);
             log.warn("Falló el envío del mensaje {} por {} (conversación {}): {}", pending.getId(),
-                    conversation.getChannel(), conversationId, reason, e instanceof ApiException ? null : e);
-            result = markFailed(pending, reason);
+                    conversation.getChannel(), conversationId, failure.reason(), e instanceof ApiException ? null : e);
+            return markFailed(pending, failure);
         }
-        // Una sola notificación, después de TODAS las escrituras: lleva el mensaje y la conversación final.
-        events.publishEvent(new MessageSentEvent(tenantId, conversationId, result.getId(), result.getDeliveryStatus()));
-        return MessageResponse.from(result);
+    }
+
+    /** Motivo legible y código estable de un envío fallido. */
+    private record Failure(String reason, String code) {
+
+        static Failure of(RuntimeException error) {
+            if (error instanceof ApiException api) {
+                return new Failure(api.getMessage(), api.getCode());
+            }
+            // Un adaptador que deja escapar un timeout o error de red tras enviar: el cliente pudo recibirlo
+            if (ChannelSendErrors.isUnconfirmed(error)) {
+                return new Failure(ChannelSendErrors.UNCONFIRMED_REASON, ChannelSendErrors.UNCONFIRMED);
+            }
+            return new Failure(UNEXPECTED_FAILURE, "CHANNEL_UNEXPECTED_ERROR");
+        }
+    }
+
+    private static ApiException notRetryable() {
+        return new ApiException(HttpStatus.CONFLICT, "MESSAGE_NOT_RETRYABLE",
+                "Solo se pueden reintentar mensajes que fallaron");
     }
 
     /** Nota interna: solo la ven los agentes, no se envía al cliente ni cuenta como respuesta. */
@@ -187,11 +258,12 @@ public class ReplyService {
                 Message.class);
     }
 
-    private Message markFailed(Message pending, String reason) {
+    private Message markFailed(Message pending, Failure failure) {
         Message updated = mongoTemplate.findAndModify(
                 Query.query(Criteria.where("_id").is(pending.getId()).and("tenantId").is(pending.getTenantId())
                         .and("deliveryStatus").is(DeliveryStatus.PENDING)),
-                Update.update("deliveryStatus", DeliveryStatus.FAILED).set("failureReason", reason),
+                Update.update("deliveryStatus", DeliveryStatus.FAILED).set("failureReason", failure.reason())
+                        .set("failureCode", failure.code()),
                 FindAndModifyOptions.options().returnNew(true), Message.class);
         return updated != null ? updated : messages.findById(pending.getId()).orElse(pending);
     }

@@ -16,7 +16,10 @@ import { filtersToQuery, inboxReducer, INITIAL_INBOX, matchesFilters, type Inbox
 export function useInbox(session: Session, filters: InboxFilters, onSessionEnded: (notice: string) => void) {
   const [state, dispatch] = useReducer(inboxReducer, INITIAL_INBOX)
   const [connection, setConnection] = useState<ConnectionState>('connecting')
+  /** Aumenta en cada conexión del WebSocket: quien muestre datos debe recargarlos (pudo perder eventos). */
+  const [connectionSeq, setConnectionSeq] = useState(0)
   const requestSeq = useRef(0)
+  const listenersRef = useRef(new Set<RealtimeListener>())
   const abortRef = useRef<AbortController | null>(null)
   // Valores actuales para los callbacks del WebSocket, que viven más que un render
   const filtersRef = useRef(filters)
@@ -63,10 +66,14 @@ export function useInbox(session: Session, filters: InboxFilters, onSessionEnded
           conversation: event.conversation,
           matches: matchesFilters(event.conversation, filtersRef.current, session.user.id),
         })
+        listenersRef.current.forEach((listener) => listener(event))
       },
       // En cada conexión, incluida la primera: lo que pasó antes de quedar suscritos no llegó por WebSocket.
       // Los eventos que lleguen mientras tanto se reaplican sobre la respuesta (ver inboxReducer).
-      onConnected: reload,
+      onConnected: () => {
+        reload()
+        setConnectionSeq((n) => n + 1)
+      },
       onStateChange: setConnection,
       onSessionEnded: (notice) => endRef.current(notice),
     })
@@ -75,5 +82,16 @@ export function useInbox(session: Session, filters: InboxFilters, onSessionEnded
     }
   }, [session.token, session.tenant.id, session.user.id, reload])
 
-  return { ...state, connection, reload }
+  /** Otros componentes (la conversación abierta) reciben los mismos eventos sin abrir otro WebSocket. */
+  const subscribe = useCallback((listener: RealtimeListener) => {
+    listenersRef.current.add(listener)
+    return () => {
+      listenersRef.current.delete(listener)
+    }
+  }, [])
+
+  return { ...state, connection, connectionSeq, reload, subscribe }
 }
+
+export type RealtimeListener = (event: RealtimeEvent) => void
+export type SubscribeToRealtime = (listener: RealtimeListener) => () => void

@@ -1,6 +1,7 @@
 package com.unicanal.channel.whatsapp;
 
 import com.unicanal.channel.ChannelAdapter;
+import com.unicanal.channel.ChannelSendErrors;
 import com.unicanal.channel.ChannelType;
 import com.unicanal.channel.OutboundMessage;
 import com.unicanal.channel.SendResult;
@@ -89,8 +90,14 @@ public class WhatsAppCloudAdapter implements ChannelAdapter {
             log.error("WhatsApp rechazó el envío: HTTP {}", e.getStatusCode().value());
             throw sendFailed();
         } catch (RestClientException e) {
-            log.error("No se pudo contactar a WhatsApp: {}", e.getMessage());
-            throw sendFailed();
+            if (ChannelSendErrors.neverConnected(e)) {
+                // La conexión no se abrió: el mensaje seguro que no salió
+                log.error("No se pudo conectar con WhatsApp: {}", e.getMessage());
+                throw sendFailed();
+            }
+            // Timeout o conexión cortada después de enviar: Meta pudo haberlo entregado
+            log.error("WhatsApp no confirmó el envío (sin respuesta): {}", e.getMessage());
+            throw ChannelSendErrors.unconfirmed();
         }
     }
 
@@ -108,7 +115,7 @@ public class WhatsAppCloudAdapter implements ChannelAdapter {
     }
 
     private static ApiException sendFailed() {
-        return new ApiException(HttpStatus.BAD_GATEWAY, "CHANNEL_SEND_FAILED",
+        return new ApiException(HttpStatus.BAD_GATEWAY, ChannelSendErrors.FAILED,
                 "No se pudo enviar el mensaje por WhatsApp");
     }
 }

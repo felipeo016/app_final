@@ -1,5 +1,6 @@
 package com.unicanal.channel.simulated;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -36,5 +37,12 @@ class DevSimulatorDisabledIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"channel\":\"WHATSAPP\",\"contactExternalId\":\"5731\",\"text\":\"hola\"}"))
                 .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/dev/status").header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isNotFound());
+        for (String url : new String[] {"/api/dev/simulate-status", "/api/dev/simulate-send-failures"}) {
+            mockMvc.perform(post(url).header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isNotFound());
+        }
     }
 }

@@ -36,6 +36,8 @@ public class Message {
     private DeliveryStatus deliveryStatus;
     /** Motivo legible del fallo cuando deliveryStatus es FAILED; se muestra al agente. */
     private String failureReason;
+    /** Código estable del fallo (p. ej. CHANNEL_SEND_UNCONFIRMED: puede que el cliente sí lo recibiera). */
+    private String failureCode;
 
     protected Message() {
     }
@@ -103,5 +105,9 @@ public class Message {
 
     public String getFailureReason() {
         return failureReason;
+    }
+
+    public String getFailureCode() {
+        return failureCode;
     }
 }
