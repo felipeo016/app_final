@@ -19,6 +19,10 @@ const BY_CODE: Record<string, string> = {
   AGENT_INACTIVE: 'Ese agente está desactivado.',
   ASSIGNMENT_FORBIDDEN: 'No puedes cambiar la asignación de este chat.',
   FORBIDDEN: 'No tienes permiso para hacer esto.',
+  EMAIL_ALREADY_REGISTERED: 'Ese correo ya está registrado. Usa otro correo para el agente.',
+  CANNOT_DEACTIVATE_OWNER: 'No se puede desactivar al dueño de la empresa.',
+  AGENT_NOT_FOUND: 'Ese agente ya no existe.',
+  CONTACT_NOT_FOUND: 'Ese cliente ya no existe.',
 }
 
 const BY_STATUS: Record<number, string> = {

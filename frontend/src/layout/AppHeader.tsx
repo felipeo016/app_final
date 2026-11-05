@@ -17,6 +17,7 @@ interface Props {
 
 export default function AppHeader({ session, onLogout, connection }: Props) {
   const simulator = useSimulatorAvailable()
+  const owner = session.user.role === 'OWNER'
   return (
     <header className="app-header">
       <div className="app-brand">
@@ -26,12 +27,15 @@ export default function AppHeader({ session, onLogout, connection }: Props) {
         <NavLink to="/" end>
           Bandeja
         </NavLink>
+        {/* Agentes y Ajustes solo existen para el dueño (el backend también lo exige) */}
+        {owner && <NavLink to="/agentes">Agentes</NavLink>}
+        {owner && <NavLink to="/ajustes">Ajustes</NavLink>}
         {simulator && <NavLink to="/simulador">Simulador</NavLink>}
       </nav>
       <div className="app-user">
         {connection && <span className={`connection connection-${connection}`}>{CONNECTION_LABELS[connection]}</span>}
-        <span>
-          {session.user.name} · {session.user.role === 'OWNER' ? 'Dueño' : 'Agente'}
+        <span className="app-user-name">
+          {session.user.name} · {owner ? 'Dueño' : 'Agente'}
         </span>
         <button type="button" className="btn-link" onClick={onLogout}>
           Cerrar sesión

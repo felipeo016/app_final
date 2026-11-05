@@ -144,5 +144,30 @@ export function useConversation(conversationId: string, subscribe: SubscribeToRe
     [conversationId],
   )
 
-  return { ...data, loadOlder, send, retry, changeStatus }
+  /** {@code agentId} nulo = dejar sin asignar. Las reglas (OWNER / AGENT) las aplica el backend. */
+  const assign = useCallback(
+    async (agentId: string | null) => {
+      const conversation = await apiFetch<Conversation>(`/api/conversations/${conversationId}/assignee`, {
+        method: 'PUT',
+        body: { agentId },
+      })
+      setData((d) => ({ ...d, conversation }))
+    },
+    [conversationId],
+  )
+
+  const markSale = useCallback(
+    async (isSale: boolean, saleAmount: number | null) => {
+      const conversation = await apiFetch<Conversation>(`/api/conversations/${conversationId}/sale`, {
+        method: 'PATCH',
+        body: { isSale, saleAmount },
+      })
+      setData((d) => ({ ...d, conversation }))
+    },
+    [conversationId],
+  )
+
+  return { ...data, loadOlder, send, retry, changeStatus, assign, markSale }
 }
+
+export type ConversationChat = ReturnType<typeof useConversation>

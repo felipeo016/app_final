@@ -2,24 +2,23 @@ import { useCallback, useEffect, useState } from 'react'
 import { friendlyError } from '../api/errors'
 import type { AssignableUser, Conversation } from '../api/types'
 import { CHANNEL_LABELS, channelClass, STATUS_LABELS, statusClass } from '../inbox/labels'
-import type { SubscribeToRealtime } from '../inbox/useInbox'
 import Composer from './Composer'
 import MessageList from './MessageList'
 import { formatRemaining, windowInfo } from './messages'
 import { useQuickReplies } from './quickReplies'
-import { useConversation } from './useConversation'
+import type { ConversationChat } from './useConversation'
 
 interface Props {
-  conversationId: string
+  chat: ConversationChat
   currentUserId: string
   users: AssignableUser[]
-  subscribe: SubscribeToRealtime
-  connectionSeq: number
+  /** Vista de celular: volver a la bandeja y ver el perfil del cliente. */
+  onBack: () => void
+  onShowProfile: () => void
 }
 
 const WINDOW_CLOSED_REASON =
   'La ventana de 24 h de WhatsApp está cerrada: pasaron más de 24 horas desde el último mensaje del cliente, y WhatsApp solo permite plantillas aprobadas hasta que vuelva a escribir.'
-const RESOLVED_REASON = 'La conversación está resuelta. Reábrela para responder al cliente.'
 
 /** Hora actual renovada cada {@code intervalMs}, para el contador de la ventana. */
 function useNow(intervalMs: number): number {
@@ -31,8 +30,7 @@ function useNow(intervalMs: number): number {
   return now
 }
 
-export default function ConversationView({ conversationId, currentUserId, users, subscribe, connectionSeq }: Props) {
-  const chat = useConversation(conversationId, subscribe, connectionSeq)
+export default function ConversationView({ chat, currentUserId, users, onBack, onShowProfile }: Props) {
   const quickReplies = useQuickReplies()
   const [actionError, setActionError] = useState<string | null>(null)
   const now = useNow(15_000)
@@ -62,21 +60,34 @@ export default function ConversationView({ conversationId, currentUserId, users,
     return (
       <div className="placeholder" role="alert">
         {friendlyError(chat.error)}
+        <button type="button" className="btn-link mobile-only" onClick={onBack}>
+          ← Volver a la bandeja
+        </button>
       </div>
     )
   }
 
   const conversation = chat.conversation
   const window24 = windowInfo(conversation.channel, conversation.replyWindowExpiresAt, conversation.replyWindowOpen, now)
-  const replyBlockedReason = !conversation.open ? RESOLVED_REASON : !window24.open ? WINDOW_CLOSED_REASON : null
+  const replyBlockedReason = !window24.open ? WINDOW_CLOSED_REASON : null
 
   return (
     <div className="conversation">
+      <div className="mobile-bar mobile-only">
+        <button type="button" className="btn-link" onClick={onBack}>
+          ← Bandeja
+        </button>
+        <button type="button" className="btn-link" onClick={onShowProfile}>
+          Perfil del cliente →
+        </button>
+      </div>
       <ConversationHeader
         conversation={conversation}
         onChangeStatus={(status) => runAction(() => chat.changeStatus(status))}
       />
-      {window24.applies && <WindowBanner open={window24.open} remainingMs={window24.remainingMs} />}
+      {conversation.open && window24.applies && (
+        <WindowBanner open={window24.open} remainingMs={window24.remainingMs} />
+      )}
       {actionError && (
         <p className="action-error" role="alert">
           {actionError}
@@ -93,12 +104,19 @@ export default function ConversationView({ conversationId, currentUserId, users,
         onRetry={(messageId) => runAction(() => chat.retry(messageId))}
         authorName={authorName}
       />
-      <Composer
-        replyBlockedReason={replyBlockedReason}
-        quickReplies={quickReplies.replies}
-        onOpenQuickReplies={quickReplies.refresh}
-        onSend={chat.send}
-      />
+      {conversation.open ? (
+        <Composer
+          replyBlockedReason={replyBlockedReason}
+          quickReplies={quickReplies.replies}
+          onOpenQuickReplies={quickReplies.refresh}
+          onSend={chat.send}
+        />
+      ) : (
+        // Conversación resuelta (también al abrirla desde el historial): solo lectura
+        <p className="read-only-bar" role="status">
+          Conversación resuelta · solo lectura. Usa <strong>Reabrir</strong> si necesitas continuarla.
+        </p>
+      )}
     </div>
   )
 }

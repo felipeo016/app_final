@@ -3,7 +3,7 @@ import { apiFetch } from '../api/http'
 import type { AssignableUser } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
 import type { Session } from '../auth/session'
-import ConversationView from '../conversation/ConversationView'
+import ConversationWorkspace, { type MobileView } from '../conversation/ConversationWorkspace'
 import AppHeader from '../layout/AppHeader'
 import ConversationList from './ConversationList'
 import InboxFiltersBar from './InboxFiltersBar'
@@ -20,6 +20,8 @@ export default function InboxPage() {
 function Inbox({ session, logout }: { session: Session; logout: (notice?: string) => void }) {
   const [filters, setFilters] = useState<InboxFilters>(DEFAULT_FILTERS)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // En pantallas angostas se ve una sola columna a la vez (en escritorio se ignora: el CSS muestra las tres)
+  const [mobileView, setMobileView] = useState<MobileView>('inbox')
   const [users, setUsers] = useState<AssignableUser[]>([])
   const inbox = useInbox(session, filters, logout)
 
@@ -29,11 +31,16 @@ function Inbox({ session, logout }: { session: Session; logout: (notice?: string
       .catch(() => setUsers([]))
   }, [])
 
+  function openConversation(id: string) {
+    setSelectedId(id)
+    setMobileView('chat')
+  }
+
   return (
     <div className="app">
       <AppHeader session={session} onLogout={() => logout()} connection={inbox.connection} />
 
-      <main className="columns">
+      <main className={`columns mobile-view-${selectedId ? mobileView : 'inbox'}`}>
         <section className="column column-inbox" aria-label="Bandeja">
           <InboxFiltersBar filters={filters} users={users} onChange={setFilters} />
           <ConversationList
@@ -41,34 +48,37 @@ function Inbox({ session, logout }: { session: Session; logout: (notice?: string
             loading={inbox.loading}
             error={inbox.error}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={openConversation}
             onRetry={inbox.reload}
           />
         </section>
 
-        <section className="column column-conversation" aria-label="Conversación">
-          {selectedId ? (
-            <ConversationView
-              // Otro chat = otra instancia: todo su estado (mensajes, errores, borrador) empieza de cero
-              key={selectedId}
-              conversationId={selectedId}
-              currentUserId={session.user.id}
-              users={users}
-              subscribe={inbox.subscribe}
-              connectionSeq={inbox.connectionSeq}
-            />
-          ) : (
-            <div className="placeholder">
-              <p>Selecciona una conversación de la bandeja.</p>
-            </div>
-          )}
-        </section>
-
-        <aside className="column column-profile" aria-label="Perfil del cliente">
-          <div className="placeholder">
-            <p>{selectedId ? 'El perfil del cliente llega en el paso 8c.' : 'Perfil del cliente'}</p>
-          </div>
-        </aside>
+        {selectedId ? (
+          <ConversationWorkspace
+            // Otro chat = otra instancia: todo su estado (mensajes, errores, borrador) empieza de cero
+            key={selectedId}
+            conversationId={selectedId}
+            session={session}
+            users={users}
+            subscribe={inbox.subscribe}
+            connectionSeq={inbox.connectionSeq}
+            onMobileView={setMobileView}
+            onOpenConversation={openConversation}
+          />
+        ) : (
+          <>
+            <section className="column column-conversation" aria-label="Conversación">
+              <div className="placeholder">
+                <p>Selecciona una conversación de la bandeja.</p>
+              </div>
+            </section>
+            <aside className="column column-profile" aria-label="Perfil del cliente">
+              <div className="placeholder">
+                <p>Aquí verás el perfil del cliente.</p>
+              </div>
+            </aside>
+          </>
+        )}
       </main>
     </div>
   )
