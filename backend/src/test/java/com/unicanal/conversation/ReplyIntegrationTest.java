@@ -85,6 +85,8 @@ class ReplyIntegrationTest {
     private ChannelRegistry channelRegistry;
     @Autowired
     private RecordingFacebookAdapter facebook;
+    @Autowired
+    private PendingSendSweeper pendingSweeper;
 
     private ConversationTestSupport support;
 
@@ -465,6 +467,23 @@ class ReplyIntegrationTest {
         assertThat(conversation.getStatus()).isEqualTo(ConversationStatus.RESOLVED);
         assertThat(conversation.isOpen()).isFalse();
         assertThat(conversation.getFirstResponseAt()).isNotNull();
+    }
+
+    @Test
+    void ifTheChannelConfirmsAfterTheSweeperGaveUpTheMessageEndsSent() throws Exception {
+        Session owner = support.newCompany();
+        String id = support.inbound(owner, ChannelType.FACEBOOK);
+        // Mientras el canal "tarda", el barrido de huérfanos corre como si hubieran pasado 10 minutos
+        facebook.duringSend = () -> pendingSweeper.sweep(Instant.now().plus(Duration.ofMinutes(10)));
+
+        support.reply(owner, id, "tardío pero enviado").andExpect(status().isCreated())
+                .andExpect(jsonPath("$.deliveryStatus").value("SENT"))
+                .andExpect(jsonPath("$.failureCode").doesNotExist());
+
+        Message stored = outbound(owner, id).get(0);
+        assertThat(stored.getDeliveryStatus()).isEqualTo(DeliveryStatus.SENT);
+        assertThat(stored.getExternalId()).startsWith("fb-");
+        assertThat(stored.getFailureReason()).isNull();
     }
 
     @Test

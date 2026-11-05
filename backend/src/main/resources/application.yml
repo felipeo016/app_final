@@ -21,6 +21,8 @@ app:
   # solo las pruebas las desactivan para invocarlas a mano con un reloj controlado.
   scheduling:
     enabled: ${SCHEDULING_ENABLED:true}
+  # Datos de demostración ("Tienda Demo"): solo con el perfil dev Y SEED_DEMO=true. Idempotente.
+  seed-demo: ${SEED_DEMO:false}
   jwt:
     # Sin valor por defecto: el secreto solo viene del entorno (mínimo 32 caracteres).
     secret: ${JWT_SECRET:}
@@ -41,6 +43,9 @@ app:
     expiry-check-ms: 15000
   # Alerta "cero mensajes perdidos": cada cuánto se buscan chats sin respuesta (los minutos son por empresa)
   risk-alert:
+    check-ms: 60000
+  # Cada cuánto se cierran los envíos que quedaron en PENDING más de 5 min (pasan a "sin confirmar")
+  pending-sweep:
     check-ms: 60000
 
 management:

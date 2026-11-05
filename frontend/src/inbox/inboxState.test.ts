@@ -43,9 +43,10 @@ const filters = (overrides: Partial<InboxFilters>): InboxFilters => ({ ...DEFAUL
 
 describe('filtros', () => {
   it('arma la consulta solo con los filtros activos', () => {
-    expect(filtersToQuery(DEFAULT_FILTERS)).toBe('size=100')
+    expect(filtersToQuery(DEFAULT_FILTERS)).toBe('size=25')
+    expect(filtersToQuery(DEFAULT_FILTERS, 25, '1730000000000_abc')).toBe('size=25&before=1730000000000_abc')
     expect(filtersToQuery(filters({ status: 'NEW', channel: 'FACEBOOK', assignee: 'me', unanswered: true }))).toBe(
-      'status=NEW&channel=FACEBOOK&assignee=me&unanswered=true&size=100',
+      'status=NEW&channel=FACEBOOK&assignee=me&unanswered=true&size=25',
     )
   })
 
@@ -103,7 +104,7 @@ describe('recarga con eventos concurrentes', () => {
     state = inboxReducer(state, { type: 'event', conversation: fresh, matches: true })
     // La respuesta se calculó antes del evento: trae la versión vieja
     const stale = conversation('a', { unreadCount: 1 })
-    state = inboxReducer(state, { type: 'load-success', requestId: 1, conversations: [stale, conversation('b')] })
+    state = inboxReducer(state, { type: 'load-success', requestId: 1, conversations: [stale, conversation('b')], hasMore: false })
 
     expect(state.loading).toBe(false)
     expect(state.buffered).toEqual([])
@@ -114,16 +115,16 @@ describe('recarga con eventos concurrentes', () => {
   it('descarta la respuesta de una recarga anterior', () => {
     let state = inboxReducer(INITIAL_INBOX, { type: 'load-start', requestId: 1 })
     state = inboxReducer(state, { type: 'load-start', requestId: 2 })
-    state = inboxReducer(state, { type: 'load-success', requestId: 1, conversations: [conversation('viejo')] })
+    state = inboxReducer(state, { type: 'load-success', requestId: 1, conversations: [conversation('viejo')], hasMore: false })
     expect(state.loading).toBe(true)
     expect(state.conversations).toEqual([])
-    state = inboxReducer(state, { type: 'load-success', requestId: 2, conversations: [conversation('nuevo')] })
+    state = inboxReducer(state, { type: 'load-success', requestId: 2, conversations: [conversation('nuevo')], hasMore: false })
     expect(state.conversations.map((c) => c.id)).toEqual(['nuevo'])
   })
 
   it('fuera de una recarga los eventos no se acumulan', () => {
     let state = inboxReducer(INITIAL_INBOX, { type: 'load-start', requestId: 1 })
-    state = inboxReducer(state, { type: 'load-success', requestId: 1, conversations: [] })
+    state = inboxReducer(state, { type: 'load-success', requestId: 1, conversations: [], hasMore: false })
     state = inboxReducer(state, { type: 'event', conversation: conversation('a'), matches: true })
     expect(state.buffered).toEqual([])
     expect(state.conversations).toHaveLength(1)

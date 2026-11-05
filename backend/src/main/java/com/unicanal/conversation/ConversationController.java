@@ -39,16 +39,20 @@ public class ConversationController {
         this.assignmentService = assignmentService;
     }
 
-    /** @param assignee "me", "unassigned" o el id de un agente */
+    /**
+     * @param assignee "me", "unassigned" o el id de un agente
+     * @param before   cursor de "Cargar más" (el {@code nextCursor} de la respuesta anterior)
+     */
     @GetMapping
     public PageResponse<ConversationResponse> list(@AuthenticationPrincipal AuthPrincipal principal,
             @RequestParam(required = false) ConversationStatus status,
             @RequestParam(required = false) ChannelType channel,
             @RequestParam(required = false) String assignee,
             @RequestParam(defaultValue = "false") boolean unanswered,
+            @RequestParam(required = false) String before,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return conversationService.list(principal, status, channel, assignee, unanswered, page, size);
+        return conversationService.list(principal, status, channel, assignee, unanswered, before, page, size);
     }
 
     @PatchMapping("/{id}/sale")

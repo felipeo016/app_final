@@ -19,6 +19,10 @@ interface Props {
   selectedId: string | null
   onSelect: (id: string) => void
   onRetry: () => void
+  /** Hay más conversaciones en el servidor: se muestra "Cargar más". */
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
 }
 
 /** Hora actual que se renueva cada 30 s, para que "lleva X min" avance sin eventos. */
@@ -31,7 +35,17 @@ function useNow(intervalMs = 30_000): number {
   return now
 }
 
-export default function ConversationList({ conversations, loading, error, selectedId, onSelect, onRetry }: Props) {
+export default function ConversationList({
+  conversations,
+  loading,
+  error,
+  selectedId,
+  onSelect,
+  onRetry,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}: Props) {
   const now = useNow()
 
   if (error && conversations.length === 0) {
@@ -60,6 +74,14 @@ export default function ConversationList({ conversations, loading, error, select
           />
         </li>
       ))}
+      {hasMore && (
+        <li className="load-more-row">
+          <button type="button" className="btn-secondary load-more" onClick={onLoadMore} disabled={loadingMore || loading}>
+            {loadingMore ? 'Cargando…' : 'Cargar más'}
+          </button>
+          {error && <p className="field-error">{error}</p>}
+        </li>
+      )}
     </ul>
   )
 }

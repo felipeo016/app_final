@@ -182,6 +182,22 @@ class DevSimulatorIntegrationTest {
         return JsonPath.read(body, "$.id");
     }
 
+    @Autowired
+    private org.springframework.context.ApplicationContext context;
+    @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")
+    private org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping mappings;
+
+    @Test
+    void inTheDevProfileTheDevEndpointsExistButTheSeederNeedsSeedDemo() {
+        // Control de la prueba "fuera de dev no existe ninguna ruta /api/dev": aquí sí existen
+        assertThat(DevSimulatorDisabledIntegrationTest.registeredPaths(mappings)).contains(
+                "/api/dev/status", "/api/dev/simulate-inbound", "/api/dev/simulate-status",
+                "/api/dev/simulate-send-failures");
+        // Sin SEED_DEMO=true no hay datos demo, ni siquiera en dev
+        assertThat(context.getBeansOfType(com.unicanal.demo.DevDataSeeder.class)).isEmpty();
+    }
+
     @Test
     void theStatusEndpointTellsTheUiThatTheSimulatorExists() throws Exception {
         Session session = newCompany();

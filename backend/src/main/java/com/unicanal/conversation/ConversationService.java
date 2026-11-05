@@ -5,6 +5,8 @@ import com.unicanal.common.ApiException;
 import com.unicanal.common.AuthPrincipal;
 import com.unicanal.common.FieldValidationException;
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.ArrayList;
 import org.bson.types.Decimal128;
 import org.springframework.data.mongodb.core.aggregation.ComparisonOperators;
 import com.unicanal.common.PageResponse;
@@ -65,35 +67,108 @@ public class ConversationService {
      */
     public PageResponse<ConversationResponse> list(AuthPrincipal principal, ConversationStatus status,
             ChannelType channel, String assignee, boolean unanswered, int page, int size) {
-        int safePage = Math.max(page, 0);
+        return list(principal, status, channel, assignee, unanswered, null, page, size);
+    }
+
+    /**
+     * Bandeja ordenada por actividad (lastMessageAt desc) con el id como desempate, así el orden es total y estable.
+     *
+     * @param before cursor de "Cargar más" ({@code nextCursor} de la respuesta anterior): devuelve las
+     *               conversaciones que van DESPUÉS de esa en el orden. A diferencia de pedir la página N, no se
+     *               salta ni repite conversaciones aunque entre peticiones alguna cambie de estado o de filtro.
+     */
+    public PageResponse<ConversationResponse> list(AuthPrincipal principal, ConversationStatus status,
+            ChannelType channel, String assignee, boolean unanswered, String before, int page, int size) {
         int safeSize = Math.clamp(size, 1, MAX_PAGE_SIZE);
-        Criteria criteria = Criteria.where("tenantId").is(principal.tenantId());
+        Cursor cursor = Cursor.parse(before);
+        int safePage = cursor != null ? 0 : Math.max(page, 0);
+
+        List<Criteria> filters = new ArrayList<>();
+        filters.add(Criteria.where("tenantId").is(principal.tenantId()));
         if (status != null) {
-            criteria.and("status").is(status);
+            filters.add(Criteria.where("status").is(status));
         }
         if (channel != null) {
-            criteria.and("channel").is(channel);
+            filters.add(Criteria.where("channel").is(channel));
         }
         if (assignee != null && !assignee.isBlank()) {
-            switch (assignee) {
-                case "me" -> criteria.and("assignedTo").is(principal.userId());
-                case "unassigned" -> criteria.and("assignedTo").is(null);
-                default -> criteria.and("assignedTo").is(assignee);
-            }
+            filters.add(switch (assignee) {
+                case "me" -> Criteria.where("assignedTo").is(principal.userId());
+                case "unassigned" -> Criteria.where("assignedTo").is(null);
+                default -> Criteria.where("assignedTo").is(assignee);
+            });
         }
         if (unanswered) {
             // open == (status != RESOLVED). En BSON un campo ausente es menor que cualquier fecha, así que
             // $gt también cubre "nunca se respondió".
-            criteria.and("open").is(true).and("lastInboundAt").ne(null)
-                    .andOperator(Criteria.expr(ComparisonOperators.valueOf("lastInboundAt")
-                            .greaterThan("lastOutboundAt")));
+            filters.add(Criteria.where("open").is(true).and("lastInboundAt").ne(null));
+            filters.add(Criteria.expr(ComparisonOperators.valueOf("lastInboundAt").greaterThan("lastOutboundAt")));
         }
-        Query query = Query.query(criteria);
-        long total = mongoTemplate.count(query, Conversation.class);
-        query.with(PageRequest.of(safePage, safeSize,
-                Sort.by(Sort.Order.desc("lastMessageAt"), Sort.Order.desc("createdAt"))));
+        long total = mongoTemplate.count(Query.query(new Criteria().andOperator(filters)), Conversation.class);
+
+        List<Criteria> page1 = new ArrayList<>(filters);
+        if (cursor != null) {
+            page1.add(cursor.after());
+        }
+        // Se pide uno de más para saber si hay otra página sin un segundo conteo
+        Query query = Query.query(new Criteria().andOperator(page1))
+                .with(Sort.by(Sort.Order.desc("lastMessageAt"), Sort.Order.desc("_id")))
+                .skip((long) safePage * safeSize)
+                .limit(safeSize + 1);
         List<Conversation> found = mongoTemplate.find(query, Conversation.class);
-        return PageResponse.of(views.toResponses(principal.tenantId(), found), safePage, safeSize, total);
+        boolean more = found.size() > safeSize;
+        List<Conversation> items = more ? found.subList(0, safeSize) : found;
+        String nextCursor = more ? Cursor.of(items.get(items.size() - 1)).encode() : null;
+        List<ConversationResponse> responses = views.toResponses(principal.tenantId(), items);
+        return cursor != null
+                ? PageResponse.byCursor(responses, false, safeSize, total, nextCursor)
+                : new PageResponse<>(responses, safePage, safeSize, total,
+                        (int) ((total + safeSize - 1) / safeSize), nextCursor);
+    }
+
+    /** Posición en el orden de la bandeja: "{lastMessageAt en ms}_{id}" (sin hora: "_{id}"). */
+    record Cursor(Instant lastMessageAt, String id) {
+
+        static Cursor of(Conversation conversation) {
+            return new Cursor(conversation.getLastMessageAt(), conversation.getId());
+        }
+
+        String encode() {
+            return (lastMessageAt == null ? "" : String.valueOf(lastMessageAt.toEpochMilli())) + "_" + id;
+        }
+
+        static Cursor parse(String value) {
+            if (value == null || value.isBlank()) {
+                return null;
+            }
+            int separator = value.indexOf('_');
+            String id = separator < 0 ? "" : value.substring(separator + 1);
+            if (separator < 0 || id.isBlank()) {
+                throw invalid();
+            }
+            try {
+                String millis = value.substring(0, separator);
+                return new Cursor(millis.isEmpty() ? null : Instant.ofEpochMilli(Long.parseLong(millis)), id);
+            } catch (NumberFormatException e) {
+                throw invalid();
+            }
+        }
+
+        /** Lo que va después en orden descendente (lastMessageAt desc, _id desc; las sin fecha al final). */
+        Criteria after() {
+            Criteria sameTimeOlderId = Criteria.where("lastMessageAt").is(lastMessageAt).and("_id").lt(id);
+            if (lastMessageAt == null) {
+                return sameTimeOlderId;
+            }
+            return new Criteria().orOperator(
+                    Criteria.where("lastMessageAt").lt(lastMessageAt),
+                    sameTimeOlderId,
+                    Criteria.where("lastMessageAt").is(null));
+        }
+
+        private static FieldValidationException invalid() {
+            return new FieldValidationException("before", "El cursor de paginación no es válido");
+        }
     }
 
     public ConversationResponse get(String tenantId, String conversationId) {

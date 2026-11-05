@@ -113,7 +113,8 @@ public class ReplyService {
         Message pending = mongoTemplate.findAndModify(
                 Query.query(Criteria.where("_id").is(messageId).and("tenantId").is(tenantId)
                         .and("deliveryStatus").is(DeliveryStatus.FAILED)),
-                Update.update("deliveryStatus", DeliveryStatus.PENDING).unset("failureReason").unset("failureCode"),
+                Update.update("deliveryStatus", DeliveryStatus.PENDING).set("pendingSince", target.now())
+                        .unset("failureReason").unset("failureCode"),
                 FindAndModifyOptions.options().returnNew(true), Message.class);
         if (pending == null) {
             throw notRetryable();
@@ -247,10 +248,20 @@ public class ReplyService {
         Message updated = mongoTemplate.findAndModify(
                 Query.query(Criteria.where("_id").is(pending.getId()).and("tenantId").is(pending.getTenantId())
                         .and("deliveryStatus").is(DeliveryStatus.PENDING)),
-                Update.update("externalId", sent.externalId()).set("deliveryStatus", status),
+                Update.update("externalId", sent.externalId()).set("deliveryStatus", status).unset("pendingSince"),
                 FindAndModifyOptions.options().returnNew(true), Message.class);
         if (updated != null) {
             return updated;
+        }
+        // El barrido de huérfanos lo dio por "sin confirmar", pero el canal acabó confirmando: ahora sí salió
+        Message confirmedLate = mongoTemplate.findAndModify(
+                Query.query(Criteria.where("_id").is(pending.getId()).and("deliveryStatus").is(DeliveryStatus.FAILED)
+                        .and("failureCode").is(ChannelSendErrors.UNCONFIRMED)),
+                Update.update("externalId", sent.externalId()).set("deliveryStatus", status)
+                        .unset("failureReason").unset("failureCode").unset("pendingSince"),
+                FindAndModifyOptions.options().returnNew(true), Message.class);
+        if (confirmedLate != null) {
+            return confirmedLate;
         }
         // El estado ya avanzó por otra vía: se conserva y solo se guarda el id externo.
         return mongoTemplate.findAndModify(Query.query(Criteria.where("_id").is(pending.getId())),
@@ -263,7 +274,7 @@ public class ReplyService {
                 Query.query(Criteria.where("_id").is(pending.getId()).and("tenantId").is(pending.getTenantId())
                         .and("deliveryStatus").is(DeliveryStatus.PENDING)),
                 Update.update("deliveryStatus", DeliveryStatus.FAILED).set("failureReason", failure.reason())
-                        .set("failureCode", failure.code()),
+                        .set("failureCode", failure.code()).unset("pendingSince"),
                 FindAndModifyOptions.options().returnNew(true), Message.class);
         return updated != null ? updated : messages.findById(pending.getId()).orElse(pending);
     }

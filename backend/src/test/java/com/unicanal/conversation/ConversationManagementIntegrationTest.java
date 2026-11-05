@@ -417,6 +417,79 @@ class ConversationManagementIntegrationTest {
         assertThat(roles).containsExactlyInAnyOrder("OWNER", "AGENT");
     }
 
+    // --- "Cargar más": paginación por cursor ---
+
+    /** Recorre la bandeja con "Cargar más" y devuelve los ids en el orden recibido. */
+    private List<String> walkInbox(Session session, String filters, int size) throws Exception {
+        List<String> ids = new ArrayList<>();
+        String cursor = null;
+        for (int guard = 0; guard < 50; guard++) {
+            String url = "/api/conversations?size=" + size + filters
+                    + (cursor == null ? "" : "&before=" + java.net.URLEncoder.encode(cursor, "UTF-8"));
+            String body = support.getAs(session, url).andExpect(status().isOk()).andReturn().getResponse()
+                    .getContentAsString();
+            ids.addAll(JsonPath.<List<String>>read(body, "$.items[*].id"));
+            cursor = JsonPath.read(body, "$.nextCursor");
+            if (cursor == null) {
+                return ids;
+            }
+        }
+        throw new AssertionError("la paginación no terminó");
+    }
+
+    @Test
+    void loadMoreWalksTheWholeInboxInOrderWithoutGapsOrRepeatsEvenWithTiedTimes() throws Exception {
+        Session owner = support.newCompany();
+        Instant base = Instant.now().minusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        List<String> created = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            // Tres conversaciones comparten exactamente la misma hora: el desempate es el id
+            Instant at = i < 3 ? base : base.plusSeconds(i);
+            created.add(support.inbound(owner, ChannelType.SIMULATED, "cursor-" + i, at));
+        }
+
+        List<String> walked = walkInbox(owner, "", 3);
+
+        assertThat(walked).hasSize(7).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(created);
+        // Mismo orden que la primera página "grande"
+        String all = support.getAs(owner, "/api/conversations?size=50").andReturn().getResponse().getContentAsString();
+        assertThat(walked).isEqualTo(JsonPath.<List<String>>read(all, "$.items[*].id"));
+        support.getAs(owner, "/api/conversations?size=50").andExpect(jsonPath("$.nextCursor").doesNotExist());
+    }
+
+    @Test
+    void aChatLeavingTheFilterBetweenPagesDoesNotMakeTheNextPageSkipAnother() throws Exception {
+        Session owner = support.newCompany();
+        Instant base = Instant.now().minusSeconds(3600).truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        List<String> created = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            created.add(support.inbound(owner, ChannelType.SIMULATED, "gap-" + i, base.plusSeconds(i)));
+        }
+        String first = support.getAs(owner, "/api/conversations?status=NEW&size=3").andReturn().getResponse()
+                .getContentAsString();
+        List<String> firstPage = JsonPath.read(first, "$.items[*].id");
+        String cursor = JsonPath.read(first, "$.nextCursor");
+
+        // Un agente resuelve un chat ya cargado: sale del filtro "Nuevo" y todo se corre un puesto
+        support.changeStatus(owner, firstPage.get(0), "RESOLVED").andExpect(status().isOk());
+
+        String next = support.getAs(owner, "/api/conversations?status=NEW&size=3&before="
+                + java.net.URLEncoder.encode(cursor, "UTF-8")).andReturn().getResponse().getContentAsString();
+        List<String> secondPage = JsonPath.read(next, "$.items[*].id");
+        List<String> union = new ArrayList<>(firstPage);
+        union.addAll(secondPage);
+        assertThat(union).doesNotHaveDuplicates().containsExactlyInAnyOrderElementsOf(created);
+    }
+
+    @Test
+    void anInvalidCursorIsAValidationError() throws Exception {
+        Session owner = support.newCompany();
+        for (String bad : new String[] {"abc", "123", "x_id", "_"}) {
+            support.getAs(owner, "/api/conversations?before=" + bad).andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.fieldErrors.before").exists());
+        }
+    }
+
     @Test
     void markingAsReadResetsTheUnreadCounter() throws Exception {
         Session owner = support.newCompany();

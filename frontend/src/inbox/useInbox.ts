@@ -4,7 +4,15 @@ import { ApiError, apiFetch } from '../api/http'
 import type { Conversation, Page, RealtimeEvent } from '../api/types'
 import type { Session } from '../auth/session'
 import { connectRealtime, type ConnectionState } from '../realtime/realtimeClient'
-import { filtersToQuery, inboxReducer, INITIAL_INBOX, matchesFilters, type InboxFilters } from './inboxState'
+import {
+  cursorOf,
+  filtersToQuery,
+  INBOX_PAGE_SIZE,
+  inboxReducer,
+  INITIAL_INBOX,
+  matchesFilters,
+  type InboxFilters,
+} from './inboxState'
 
 /**
  * Bandeja en tiempo real:
@@ -29,24 +37,59 @@ export function useInbox(session: Session, filters: InboxFilters, onSessionEnded
     endRef.current = onSessionEnded
   })
 
-  const reload = useCallback(() => {
+  // Lo cargado ahora mismo, para "Cargar más" (cursor de la última) y para recargar sin perder páginas
+  const loadedRef = useRef<Conversation[]>([])
+  useEffect(() => {
+    loadedRef.current = state.conversations
+  }, [state.conversations])
+
+  const startRequest = useCallback(() => {
     abortRef.current?.abort()
     const controller = new AbortController()
     abortRef.current = controller
-    const requestId = ++requestSeq.current
-    dispatch({ type: 'load-start', requestId })
-    apiFetch<Page<Conversation>>(`/api/conversations?${filtersToQuery(filtersRef.current)}`, {
-      signal: controller.signal,
-    })
-      .then((page) => dispatch({ type: 'load-success', requestId, conversations: page.items }))
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') return
-        const message = error instanceof ApiError ? error.message : 'No se pudo cargar la bandeja'
-        dispatch({ type: 'load-error', requestId, error: message })
-      })
+    return { requestId: ++requestSeq.current, signal: controller.signal }
   }, [])
 
-  // Recarga al montar y al cambiar los filtros
+  /**
+   * Pide la bandeja desde el principio. Con {@code keepLoaded} (al reconectar) trae tantas conversaciones como
+   * había cargadas, recorriendo páginas por cursor si hace falta: el agente no pierde lo que ya había cargado con
+   * "Cargar más". Al cambiar los filtros se vuelve a la primera página.
+   */
+  const reload = useCallback(
+    (keepLoaded = false) => {
+      const { requestId, signal } = startRequest()
+      const target = keepLoaded ? Math.max(INBOX_PAGE_SIZE, loadedRef.current.length) : INBOX_PAGE_SIZE
+      dispatch({ type: 'load-start', requestId })
+      fetchUpTo(filtersRef.current, target, signal)
+        .then(({ items, hasMore }) => dispatch({ type: 'load-success', requestId, conversations: items, hasMore }))
+        .catch((error: unknown) => {
+          if (isAbort(error)) return
+          dispatch({ type: 'load-error', requestId, error: errorText(error) })
+        })
+    },
+    [startRequest],
+  )
+
+  /** "Cargar más": la página que sigue a la última conversación cargada. */
+  const loadMore = useCallback(() => {
+    const last = loadedRef.current[loadedRef.current.length - 1]
+    if (!last) return
+    const { requestId, signal } = startRequest()
+    dispatch({ type: 'more-start', requestId })
+    apiFetch<Page<Conversation>>(
+      `/api/conversations?${filtersToQuery(filtersRef.current, INBOX_PAGE_SIZE, cursorOf(last))}`,
+      { signal },
+    )
+      .then((page) =>
+        dispatch({ type: 'more-success', requestId, conversations: page.items, hasMore: Boolean(page.nextCursor) }),
+      )
+      .catch((error: unknown) => {
+        if (isAbort(error)) return
+        dispatch({ type: 'more-error', requestId, error: errorText(error) })
+      })
+  }, [startRequest])
+
+  // Recarga al montar y al cambiar los filtros (vuelve a la primera página)
   const filtersKey = filtersToQuery(filters)
   useEffect(() => {
     reload()
@@ -71,7 +114,7 @@ export function useInbox(session: Session, filters: InboxFilters, onSessionEnded
       // En cada conexión, incluida la primera: lo que pasó antes de quedar suscritos no llegó por WebSocket.
       // Los eventos que lleguen mientras tanto se reaplican sobre la respuesta (ver inboxReducer).
       onConnected: () => {
-        reload()
+        reload(true)
         setConnectionSeq((n) => n + 1)
       },
       onStateChange: setConnection,
@@ -90,8 +133,34 @@ export function useInbox(session: Session, filters: InboxFilters, onSessionEnded
     }
   }, [])
 
-  return { ...state, connection, connectionSeq, reload, subscribe }
+  return { ...state, connection, connectionSeq, reload, loadMore, subscribe }
 }
+
+const MAX_PAGE = 100 // máximo que acepta el backend por petición
+
+/** Trae al menos {@code target} conversaciones (o todas si hay menos), página a página por cursor. */
+export async function fetchUpTo(
+  filters: InboxFilters,
+  target: number,
+  signal?: AbortSignal,
+  fetchPage: (url: string, signal?: AbortSignal) => Promise<Page<Conversation>> = (url, s) =>
+    apiFetch<Page<Conversation>>(url, { signal: s }),
+): Promise<{ items: Conversation[]; hasMore: boolean }> {
+  const items: Conversation[] = []
+  let cursor: string | null = null
+  let hasMore = false
+  do {
+    const size = Math.min(MAX_PAGE, Math.max(INBOX_PAGE_SIZE, target - items.length))
+    const page: Page<Conversation> = await fetchPage(`/api/conversations?${filtersToQuery(filters, size, cursor)}`, signal)
+    items.push(...page.items)
+    cursor = page.nextCursor ?? null
+    hasMore = cursor !== null
+  } while (hasMore && items.length < target)
+  return { items, hasMore }
+}
+
+const isAbort = (error: unknown) => error instanceof DOMException && error.name === 'AbortError'
+const errorText = (error: unknown) => (error instanceof ApiError ? error.message : 'No se pudo cargar la bandeja')
 
 export type RealtimeListener = (event: RealtimeEvent) => void
 export type SubscribeToRealtime = (listener: RealtimeListener) => () => void

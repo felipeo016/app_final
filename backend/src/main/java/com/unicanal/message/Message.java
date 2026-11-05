@@ -16,6 +16,9 @@ import org.springframework.data.mongodb.core.mapping.MongoId;
 @CompoundIndex(name = "tenant_conversation_timestamp", def = "{'tenantId': 1, 'conversationId': 1, 'timestamp': -1}")
 @CompoundIndex(name = "tenant_externalId_unique", def = "{'tenantId': 1, 'externalId': 1}", unique = true,
         partialFilter = "{ 'externalId': { '$type': 'string' } }")
+// Barrido de envíos PENDING huérfanos: solo indexa los mensajes que están (o estuvieron) en PENDING
+@CompoundIndex(name = "deliveryStatus_pendingSince", def = "{'deliveryStatus': 1, 'pendingSince': 1}",
+        partialFilter = "{ 'pendingSince': { '$exists': true } }")
 public class Message {
 
     @MongoId(FieldType.STRING)
@@ -38,6 +41,11 @@ public class Message {
     private String failureReason;
     /** Código estable del fallo (p. ej. CHANNEL_SEND_UNCONFIRMED: puede que el cliente sí lo recibiera). */
     private String failureCode;
+    /**
+     * Desde cuándo está en PENDING (al enviar o al reintentar); se borra al quedar SENT o FAILED. Un PENDING que
+     * dura demasiado es un envío huérfano (el proceso se cayó a mitad): lo cierra {@code PendingSendSweeper}.
+     */
+    private Instant pendingSince;
 
     protected Message() {
     }
@@ -53,6 +61,7 @@ public class Message {
         this.sentBy = sentBy;
         this.timestamp = timestamp;
         this.deliveryStatus = deliveryStatus;
+        this.pendingSince = deliveryStatus == DeliveryStatus.PENDING ? timestamp : null;
     }
 
     public String getId() {

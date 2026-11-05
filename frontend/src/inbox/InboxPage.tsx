@@ -49,7 +49,10 @@ function Inbox({ session, logout }: { session: Session; logout: (notice?: string
             error={inbox.error}
             selectedId={selectedId}
             onSelect={openConversation}
-            onRetry={inbox.reload}
+            onRetry={() => inbox.reload()}
+            hasMore={inbox.hasMore}
+            loadingMore={inbox.loadingMore}
+            onLoadMore={inbox.loadMore}
           />
         </section>
 

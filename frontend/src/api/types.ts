@@ -80,6 +80,8 @@ export interface Page<T> {
   size: number
   totalItems: number
   totalPages: number
+  /** Solo en la bandeja: cursor para "Cargar más", o nulo si no hay más. */
+  nextCursor?: string | null
 }
 
 export interface AssignableUser {
